@@ -8,6 +8,7 @@ import {
   Crosshair,
   Image as ImageIcon,
   Loader2,
+  Star,
   Target,
   TrendingDown,
   TrendingUp,
@@ -17,6 +18,15 @@ import {
 import { cn } from "@/lib/utils";
 
 type Mode = "CLASSICO" | "SMC";
+
+type Direcao =
+  | "COMPRA_FORTE"
+  | "COMPRA_FRACA"
+  | "VENDA_FORTE"
+  | "VENDA_FRACA"
+  | "NEUTRO";
+
+type Alvo = { nivel?: number; preco?: string; rr?: string };
 
 type Analysis = {
   status: "VALIDO" | "INVALIDO";
@@ -28,12 +38,16 @@ type Analysis = {
   };
   mensagem_erro?: string;
   analise?: {
-    estrutura_ou_tendencia?: string;
-    ponto_entrada?: string;
-    stop_loss?: string;
-    take_profit?: string;
-    risco_retorno_estimado?: string;
+    direcao?: Direcao;
+    probabilidade?: string;
     confianca_ia?: string;
+    estrutura_ou_tendencia?: string;
+    entrada?: { preco?: string; zona?: string; tipo?: string };
+    stop_loss?: { preco?: string; justificativa_estrutural?: string };
+    alvos?: Alvo[];
+    alvo_recomendado?: number;
+    razao_alvo_recomendado?: string;
+    risco_retorno_estimado?: string;
     justificativa?: string;
   };
 };
@@ -43,6 +57,7 @@ const LOADING_STAGES = [
   "Verificando qualidade do gráfico…",
   "Mapeando estrutura de mercado…",
   "Identificando POIs e liquidez…",
+  "Calculando alvos e R:R…",
   "Montando plano de trade…",
 ];
 
@@ -130,7 +145,7 @@ export function Analyzer() {
   }, [result]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
+    <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
       <div className="space-y-4">
         <Checklist items={checklist} hasResult={!!result} />
 
@@ -360,9 +375,12 @@ function ResultPanel({
 
   const a = result.analise ?? {};
   const v = result.validacao ?? {};
+  const alvos = (a.alvos ?? []).slice(0, 3);
+  const recomendado = a.alvo_recomendado;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5">
+      {/* Header: Ativo + pills */}
       <header className="glass flex flex-wrap items-center justify-between gap-3 rounded-xl p-4">
         <div>
           <p className="text-[10px] uppercase tracking-widest text-zinc-500">Ativo</p>
@@ -371,51 +389,142 @@ function ResultPanel({
             <span className="text-zinc-500">· {v.timeframe_identificado ?? "—"}</span>
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Pill>{result.modo_aplicado === "SMC" ? "SMC" : "Clássico"}</Pill>
-          {v.qualidade_imagem && <Pill tone="muted">QUALIDADE · {v.qualidade_imagem}</Pill>}
+          {v.qualidade_imagem && <Pill tone="muted">Qualidade · {v.qualidade_imagem}</Pill>}
           {a.confianca_ia && (
-            <Pill tone="emerald">CONFIANÇA · {a.confianca_ia}</Pill>
+            <Pill tone="emerald">Confiança · {a.confianca_ia}</Pill>
           )}
         </div>
       </header>
 
+      {/* Direção + probabilidade — sinal principal */}
+      <DirectionSignal
+        direcao={a.direcao}
+        probabilidade={a.probabilidade}
+      />
+
+      {/* Estrutura */}
       <div className="glass rounded-xl p-4">
         <p className="text-[10px] uppercase tracking-widest text-zinc-500">
-          {result.modo_aplicado === "SMC" ? "Estrutura" : "Tendência"}
+          {result.modo_aplicado === "SMC" ? "Estrutura de mercado" : "Tendência"}
         </p>
         <p className="mt-1 text-sm leading-relaxed text-offwhite">
           {a.estrutura_ou_tendencia ?? "—"}
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <PriceCard
-          icon={<Target className="h-3.5 w-3.5" />}
-          label="Entrada"
-          value={a.ponto_entrada}
-          tone="emerald"
-        />
-        <PriceCard
-          icon={<TrendingDown className="h-3.5 w-3.5" />}
-          label="Stop Loss"
-          value={a.stop_loss}
-          tone="rose"
-        />
-        <PriceCard
-          icon={<TrendingUp className="h-3.5 w-3.5" />}
-          label="Take Profit"
-          value={a.take_profit}
-          tone="emerald"
-        />
-        <PriceCard
-          icon={<Crosshair className="h-3.5 w-3.5" />}
-          label="Risco / Retorno"
-          value={a.risco_retorno_estimado}
-          tone="amber"
-        />
+      {/* Entrada */}
+      <div className="glass rounded-xl p-4">
+        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-emerald-400">
+          <Target className="h-3.5 w-3.5" />
+          Onde entrar
+        </div>
+        <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <span className="num text-2xl font-medium text-offwhite">
+            {a.entrada?.preco ?? "—"}
+          </span>
+          {a.entrada?.zona && (
+            <span className="num text-xs text-zinc-500">Zona: {a.entrada.zona}</span>
+          )}
+        </div>
+        {a.entrada?.tipo && (
+          <p className="mt-1.5 text-xs text-zinc-400">{a.entrada.tipo}</p>
+        )}
       </div>
 
+      {/* Stop + R:R recomendado */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+        <div className="rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-4">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-rose-400">
+            <TrendingDown className="h-3.5 w-3.5" />
+            Stop loss
+          </div>
+          <p className="num mt-2 text-2xl font-medium text-offwhite">
+            {a.stop_loss?.preco ?? "—"}
+          </p>
+          {a.stop_loss?.justificativa_estrutural && (
+            <p className="mt-1.5 text-xs text-zinc-400">
+              {a.stop_loss.justificativa_estrutural}
+            </p>
+          )}
+        </div>
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-amber-400">
+            <Crosshair className="h-3.5 w-3.5" />
+            Risco / Retorno
+          </div>
+          <p className="num mt-2 text-2xl font-medium text-offwhite">
+            {a.risco_retorno_estimado ?? "—"}
+          </p>
+          {typeof recomendado === "number" && (
+            <p className="mt-1.5 text-xs text-zinc-400">
+              Baseado no Alvo {recomendado}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Alvos */}
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-widest text-zinc-500">
+            Alvos · Onde realizar
+          </p>
+          {typeof recomendado === "number" && (
+            <p className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-emerald-400">
+              <Star className="h-3 w-3 fill-emerald-400" />
+              Ideal: Alvo {recomendado}
+            </p>
+          )}
+        </div>
+        <div className="grid grid-cols-3 gap-2.5">
+          {[1, 2, 3].map((n) => {
+            const alvo = alvos.find((x) => x.nivel === n) ?? alvos[n - 1];
+            const isRec = recomendado === n;
+            return (
+              <div
+                key={n}
+                className={cn(
+                  "rounded-xl border p-3 transition",
+                  isRec
+                    ? "border-emerald-500/40 bg-emerald-500/[0.07] shadow-glow"
+                    : "border-white/10 bg-white/[0.02]",
+                )}
+              >
+                <div
+                  className={cn(
+                    "flex items-center justify-between text-[10px] uppercase tracking-widest",
+                    isRec ? "text-emerald-400" : "text-zinc-500",
+                  )}
+                >
+                  <span className="flex items-center gap-1">
+                    <TrendingUp className="h-3 w-3" />
+                    Alvo {n}
+                  </span>
+                  {isRec && <Star className="h-3 w-3 fill-emerald-400" />}
+                </div>
+                <p className="num mt-1.5 text-base font-medium text-offwhite">
+                  {alvo?.preco ?? "—"}
+                </p>
+                {alvo?.rr && (
+                  <p className="num mt-0.5 text-[11px] text-zinc-500">
+                    R:R {alvo.rr}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {a.razao_alvo_recomendado && (
+          <p className="mt-2.5 text-xs text-zinc-400">
+            <span className="text-emerald-400">Por quê:</span>{" "}
+            {a.razao_alvo_recomendado}
+          </p>
+        )}
+      </div>
+
+      {/* Justificativa */}
       <div className="glass rounded-xl p-4">
         <p className="text-[10px] uppercase tracking-widest text-zinc-500">
           Justificativa
@@ -454,30 +563,97 @@ function Pill({
   );
 }
 
-function PriceCard({
-  icon,
-  label,
-  value,
-  tone,
+function DirectionSignal({
+  direcao,
+  probabilidade,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  value?: string;
-  tone: "emerald" | "rose" | "amber";
+  direcao?: Direcao;
+  probabilidade?: string;
 }) {
-  const toneClasses = {
-    emerald: "text-emerald-400",
-    rose: "text-rose-400",
-    amber: "text-amber-400",
-  }[tone];
+  const meta = directionMeta(direcao);
+  const prob = parseInt((probabilidade ?? "").replace(/\D/g, ""), 10);
+  const probShow = isFinite(prob) && prob > 0 ? prob : null;
 
   return (
-    <div className="glass rounded-xl p-4">
-      <div className={cn("flex items-center gap-1.5 text-[10px] uppercase tracking-widest", toneClasses)}>
-        {icon}
-        {label}
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-xl border p-4",
+        meta.border,
+        meta.bg,
+      )}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-zinc-500">
+            Sinal
+          </p>
+          <p className={cn("mt-1 text-xl font-semibold tracking-tight", meta.text)}>
+            {meta.label}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] uppercase tracking-widest text-zinc-500">
+            Probabilidade
+          </p>
+          <p className={cn("num mt-1 text-2xl font-medium", meta.text)}>
+            {probabilidade ?? "—"}
+          </p>
+        </div>
       </div>
-      <p className="num mt-2 text-lg font-medium text-offwhite">{value ?? "—"}</p>
+      {probShow !== null && (
+        <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-white/5">
+          <div
+            className={cn("h-full rounded-full transition-all", meta.bar)}
+            style={{ width: `${Math.min(probShow, 100)}%` }}
+          />
+        </div>
+      )}
     </div>
   );
+}
+
+function directionMeta(d?: Direcao) {
+  switch (d) {
+    case "COMPRA_FORTE":
+      return {
+        label: "Compra forte",
+        text: "text-emerald-300",
+        border: "border-emerald-500/40",
+        bg: "bg-emerald-500/[0.08]",
+        bar: "bg-emerald-500",
+      };
+    case "COMPRA_FRACA":
+      return {
+        label: "Compra fraca",
+        text: "text-emerald-400/90",
+        border: "border-emerald-500/20",
+        bg: "bg-emerald-500/[0.04]",
+        bar: "bg-emerald-500/60",
+      };
+    case "VENDA_FORTE":
+      return {
+        label: "Venda forte",
+        text: "text-rose-300",
+        border: "border-rose-500/40",
+        bg: "bg-rose-500/[0.08]",
+        bar: "bg-rose-500",
+      };
+    case "VENDA_FRACA":
+      return {
+        label: "Venda fraca",
+        text: "text-rose-400/90",
+        border: "border-rose-500/20",
+        bg: "bg-rose-500/[0.04]",
+        bar: "bg-rose-500/60",
+      };
+    case "NEUTRO":
+    default:
+      return {
+        label: d === "NEUTRO" ? "Neutro · Sem setup" : "—",
+        text: "text-zinc-300",
+        border: "border-white/10",
+        bg: "bg-white/[0.02]",
+        bar: "bg-zinc-500",
+      };
+  }
 }

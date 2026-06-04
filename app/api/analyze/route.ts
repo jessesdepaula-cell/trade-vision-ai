@@ -19,8 +19,33 @@ PASSO 2: ANÁLISE TÉCNICA (Se "status": "VALIDO")
 - Se "CLASSICO": Foque em Tendência, Suportes/Resistências, Padrões de Velas/Gráficos.
 - Se "SMC": Foque em Estrutura (BOS/CHoCH), POIs (Order Blocks, FVG/Imbalances) e Liquidez (Equal Highs/Lows).
 
-PASSO 3: PLANO DE TRADE
-Defina Entrada, Stop Loss (estrutural), Take Profit (próxima liquidez/resistência) e Risco/Retorno estimado.
+PASSO 3: PLANO DE TRADE — OBJETIVO E ACIONÁVEL
+
+Sempre leia a escala de preços do gráfico para devolver VALORES NUMÉRICOS reais. Não invente preços fora da escala visível.
+
+- DIRECAO: classifique como "COMPRA_FORTE" (todos os sinais alinhados a favor da compra), "COMPRA_FRACA" (viés de compra mas com ressalvas/contraindicações), "VENDA_FORTE", "VENDA_FRACA" ou "NEUTRO" (sem setup claro).
+- PROBABILIDADE: estimativa em % de sucesso do setup, considerando contexto, confluências e qualidade da estrutura. Ex: "65%".
+- CONFIANCA_IA: o quanto VOCÊ confia na sua própria leitura visual (não confunda com probabilidade do trade). Use "ALTA", "MEDIA" ou "BAIXA".
+- ENTRADA:
+    • preco: valor numérico exato em que entrar (ex: "1.0850", "67250", "R$ 28.50").
+    • zona: faixa aceitável (ex: "1.0845 - 1.0855").
+    • tipo: como entrar (ex: "Limit em pullback no Order Block", "Market após rompimento confirmado", "Sell stop abaixo do range").
+- STOP_LOSS:
+    • preco: valor numérico estrutural.
+    • justificativa_estrutural: 1 frase do PORQUÊ daquele nível (ex: "Abaixo do fundo do Order Block 1H", "Acima da liquidez interna do range").
+- ALVOS: SEMPRE 3 alvos progressivos (mesmo no Modo Clássico). Cada um com:
+    • nivel: 1, 2 ou 3.
+    • preco: valor numérico.
+    • rr: R:R calculado em cima do stop, ex: "1:1.5", "1:2.8".
+- ALVO_RECOMENDADO: qual dos 3 buscar (1, 2 ou 3) considerando contexto/risco.
+- RAZAO_ALVO_RECOMENDADO: 1 frase explicando por que esse alvo é o ideal (ex: "Próxima liquidez forte antes de zona de oferta diária").
+- RISCO_RETORNO_ESTIMADO: o R:R do alvo recomendado.
+- JUSTIFICATIVA: 2-3 frases objetivas, sem enrolação. Direto ao ponto.
+
+REGRAS:
+- Seja conciso. Cada campo, no máximo 1-2 frases. Sem florear.
+- Não use emojis, não use markdown, não use ** ou ##.
+- Se for "NEUTRO", ainda assim devolva entrada/stop/alvos como "—" e direcao "NEUTRO".
 
 FORMATO JSON OBRIGATÓRIO:
 {
@@ -29,13 +54,21 @@ FORMATO JSON OBRIGATÓRIO:
   "validacao": { "ativo_identificado": "string", "timeframe_identificado": "string", "qualidade_imagem": "ALTA" | "MEDIA" | "BAIXA" },
   "mensagem_erro": "string (apenas se INVALIDO)",
   "analise": {
-    "estrutura_ou_tendencia": "string",
-    "ponto_entrada": "string",
-    "stop_loss": "string",
-    "take_profit": "string",
+    "direcao": "COMPRA_FORTE" | "COMPRA_FRACA" | "VENDA_FORTE" | "VENDA_FRACA" | "NEUTRO",
+    "probabilidade": "string (ex: '70%')",
+    "confianca_ia": "ALTA" | "MEDIA" | "BAIXA",
+    "estrutura_ou_tendencia": "string (1-2 frases)",
+    "entrada": { "preco": "string", "zona": "string", "tipo": "string" },
+    "stop_loss": { "preco": "string", "justificativa_estrutural": "string" },
+    "alvos": [
+      { "nivel": 1, "preco": "string", "rr": "string" },
+      { "nivel": 2, "preco": "string", "rr": "string" },
+      { "nivel": 3, "preco": "string", "rr": "string" }
+    ],
+    "alvo_recomendado": 1,
+    "razao_alvo_recomendado": "string (1 frase)",
     "risco_retorno_estimado": "string",
-    "confianca_ia": "string",
-    "justificativa": "string"
+    "justificativa": "string (2-3 frases)"
   }
 }`;
 
@@ -91,14 +124,14 @@ export async function POST(req: Request) {
     const completion = await openai.chat.completions.create({
       model,
       temperature: 0.1,
-      max_tokens: 1500,
+      max_tokens: 2000,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT(mode) },
         {
           role: "user",
           content: [
-            { type: "text", text: `Modo: ${mode}. Retorne APENAS o JSON, sem texto fora dele.` },
+            { type: "text", text: `Modo: ${mode}. Leia a escala de preços da imagem e use VALORES NUMÉRICOS reais. Retorne APENAS o JSON.` },
             { type: "image_url", image_url: { url: imageUrl, detail: "high" } },
           ],
         },
