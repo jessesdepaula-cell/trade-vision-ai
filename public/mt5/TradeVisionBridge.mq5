@@ -11,6 +11,7 @@
 
 input string  ApiBaseUrl       = "https://tradevision-app.vercel.app";
 input string  ApiToken         = "";        // cole o token gerado em /dashboard/mt5
+input string  SymbolSuffix     = "";        // sufixo da corretora (ex: xx, m, .r). Vazio = auto-detect.
 input bool    EnableScanner    = true;      // escaneia watchlist e envia OHLC pra análise IA
 input bool    EnableBridge     = true;      // executa ordens enviadas pelo dashboard
 input int     HeartbeatSeconds = 5;         // envia info da conta e ticks
@@ -26,6 +27,85 @@ datetime lastBeat   = 0;
 datetime lastPoll   = 0;
 datetime lastWatch  = 0;
 string   watchlistJson = "";
+
+// Cache: base symbol → broker symbol resolvido
+string   resolveKeys[];
+string   resolveVals[];
+
+string ResolveSymbol(string base)
+{
+   if(StringLen(base) == 0) return "";
+
+   // cache
+   for(int i = 0; i < ArraySize(resolveKeys); i++)
+      if(resolveKeys[i] == base) return resolveVals[i];
+
+   string found = "";
+
+   // 1) sufixo manual
+   if(StringLen(SymbolSuffix) > 0)
+   {
+      string c = base + SymbolSuffix;
+      if(SymbolSelect(c, true)) found = c;
+   }
+
+   // 2) exato
+   if(found == "" && SymbolSelect(base, true)) found = base;
+
+   // 3) sufixos comuns
+   if(found == "")
+   {
+      string suffixes[10];
+      suffixes[0] = "xx"; suffixes[1] = "m"; suffixes[2] = ".r";
+      suffixes[3] = "pro"; suffixes[4] = "_i"; suffixes[5] = ".a";
+      suffixes[6] = "cent"; suffixes[7] = "x"; suffixes[8] = ".dk"; suffixes[9] = "+";
+      for(int i = 0; i < 10 && found == ""; i++)
+      {
+         string c = base + suffixes[i];
+         if(SymbolSelect(c, true)) found = c;
+      }
+   }
+
+   // 4) procura no Market Watch
+   if(found == "")
+   {
+      int total = SymbolsTotal(true);
+      for(int i = 0; i < total && found == ""; i++)
+      {
+         string sym = SymbolName(i, true);
+         if(StringFind(sym, base) == 0) found = sym;
+      }
+   }
+
+   // 5) procura no universo total
+   if(found == "")
+   {
+      int total = SymbolsTotal(false);
+      for(int i = 0; i < total && found == ""; i++)
+      {
+         string sym = SymbolName(i, false);
+         if(StringFind(sym, base) == 0)
+         {
+            SymbolSelect(sym, true);
+            found = sym;
+         }
+      }
+   }
+
+   // cache resultado (mesmo vazio para não tentar de novo)
+   int n = ArraySize(resolveKeys);
+   ArrayResize(resolveKeys, n + 1);
+   ArrayResize(resolveVals, n + 1);
+   resolveKeys[n] = base;
+   resolveVals[n] = found;
+
+   if(found == "")
+      Print("[TradeVision] Símbolo não encontrado na corretora: ", base);
+   else if(found != base)
+      Print("[TradeVision] Símbolo ", base, " resolvido como ", found);
+
+   return found;
+}
 
 //+------------------------------------------------------------------+
 int OnInit()
@@ -108,6 +188,7 @@ string BuildTicksArray()
    string out = "[";
    bool first = true;
    int pos = 0;
+   string seen[];
    while(true)
    {
       int s = StringFind(watchlistJson, "\"symbol\":\"", pos);
@@ -115,15 +196,23 @@ string BuildTicksArray()
       s += 10;
       int e = StringFind(watchlistJson, "\"", s);
       if(e < 0) break;
-      string sym = StringSubstr(watchlistJson, s, e - s);
+      string baseSym = StringSubstr(watchlistJson, s, e - s);
       pos = e + 1;
 
-      if(!SymbolSelect(sym, true)) continue;
+      string realSym = ResolveSymbol(baseSym);
+      if(realSym == "") continue;
+
+      // dedupe
+      bool dup = false;
+      for(int i = 0; i < ArraySize(seen); i++) if(seen[i] == realSym) { dup = true; break; }
+      if(dup) continue;
+      int n = ArraySize(seen); ArrayResize(seen, n + 1); seen[n] = realSym;
+
       MqlTick tk;
-      if(!SymbolInfoTick(sym, tk)) continue;
+      if(!SymbolInfoTick(realSym, tk)) continue;
 
       if(!first) out += ",";
-      out += StringFormat("{\"symbol\":\"%s\",\"bid\":%.5f,\"ask\":%.5f}", sym, tk.bid, tk.ask);
+      out += StringFormat("{\"symbol\":\"%s\",\"bid\":%.5f,\"ask\":%.5f}", realSym, tk.bid, tk.ask);
       first = false;
    }
    out += "]";
@@ -173,12 +262,17 @@ void ScanWatchlist()
 
 void ScanSymbol(string watchId, string symbol, string timeframe, string mode)
 {
-   if(!SymbolSelect(symbol, true)) return;
+   string realSym = ResolveSymbol(symbol);
+   if(realSym == "") return;
    ENUM_TIMEFRAMES tf = TfFromString(timeframe);
 
    MqlRates rates[];
-   int copied = CopyRates(symbol, tf, 0, CandlesPerScan, rates);
-   if(copied < 20) return;
+   int copied = CopyRates(realSym, tf, 0, CandlesPerScan, rates);
+   if(copied < 20)
+   {
+      Print("[TradeVision] Velas insuficientes ", realSym, " ", timeframe, " : ", copied);
+      return;
+   }
 
    string candles = "[";
    for(int i = 0; i < copied; i++)
@@ -192,10 +286,11 @@ void ScanSymbol(string watchId, string symbol, string timeframe, string mode)
 
    string payload = StringFormat(
       "{\"watchlistId\":\"%s\",\"symbol\":\"%s\",\"timeframe\":\"%s\",\"mode\":\"%s\",\"candles\":%s}",
-      watchId, symbol, timeframe, mode, candles
+      watchId, realSym, timeframe, mode, candles
    );
 
    string url = ApiBaseUrl + "/api/mt5/scan?token=" + ApiToken;
+   Print("[TradeVision] Scan ", realSym, " ", timeframe, " ", mode, " (", copied, " velas)");
    HttpPost(url, payload);
 }
 
