@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  clerkId            String    @unique
+  email              String    @unique
+  name               String?
+  subscriptionStatus String    @default("inactive") // "active" | "inactive" | "trialing" | "past_due" | "canceled"
+  stripeCustomerId   String?   @unique
+  stripeSubId        String?   @unique
+  currentPeriodEnd   DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  analyses           Analysis[]
+}
+
+model Analysis {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mode          String   // "CLASSICO" | "SMC"
+  imageUrl      String?  @db.Text
+  status        String   // "VALIDO" | "INVALIDO"
+  asset         String?
+  timeframe     String?
+  resultJson    Json
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
