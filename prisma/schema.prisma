@@ -21,6 +21,7 @@ model User {
   updatedAt          DateTime  @updatedAt
   analyses           Analysis[]
   trades             Trade[]
+  mt5Accounts        MT5Account[]
 }
 
 model Analysis {
@@ -67,4 +68,43 @@ model Trade {
 
   @@index([userId, openedAt])
   @@index([userId, mode, outcome])
+}
+
+model MT5Account {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiToken   String    @unique
+  label      String?
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+  orders     MT5Order[]
+
+  @@index([userId])
+}
+
+model MT5Order {
+  id         String    @id @default(cuid())
+  accountId  String
+  account    MT5Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  symbol     String
+  side       String    // "BUY" | "SELL"
+  volume     Float     @default(0.01)
+  entryType  String    @default("MARKET") // "MARKET" | "LIMIT" | "STOP"
+  entryPrice Float?
+  stopLoss   Float?
+  takeProfit Float?
+  comment    String?
+
+  status     String    @default("PENDING") // "PENDING" | "SENT" | "FILLED" | "REJECTED" | "EXPIRED"
+  mt5Ticket  BigInt?
+  errorMsg   String?
+
+  createdAt  DateTime  @default(now())
+  pickedAt   DateTime?
+  filledAt   DateTime?
+
+  @@index([accountId, status])
+  @@index([accountId, createdAt])
 }

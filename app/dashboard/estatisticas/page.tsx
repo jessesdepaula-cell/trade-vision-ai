@@ -3,6 +3,8 @@ import { getOrCreateUser } from "@/lib/subscription";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
 import { EquityCurve, type EquityPoint } from "@/components/dashboard/EquityCurve";
+import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
+import { PerformanceHeatmap, type TradePoint } from "@/components/dashboard/PerformanceHeatmap";
 
 export const dynamic = "force-dynamic";
 
@@ -54,13 +56,41 @@ function buildSeries(
     });
 }
 
-export default async function EstatisticasPage() {
+function periodToDate(p?: string | null): Date | null {
+  if (!p || p === "all") return null;
+  const now = new Date();
+  if (p === "7d") return new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+  if (p === "30d") return new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+  if (p === "ytd") return new Date(now.getFullYear(), 0, 1);
+  return null;
+}
+
+export default async function EstatisticasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ periodo?: string }>;
+}) {
   const user = await getOrCreateUser();
   if (!user) return null;
 
+  const params = await searchParams;
+  const periodo = params?.periodo ?? "all";
+  const since = periodToDate(periodo);
+
+  const where = {
+    userId: user.id,
+    ...(since ? { OR: [{ closedAt: { gte: since } }, { openedAt: { gte: since } }] } : {}),
+  };
+
   const all = await prisma.trade.findMany({
-    where: { userId: user.id },
-    select: { mode: true, outcome: true, rMultiple: true, pnlAmount: true, closedAt: true },
+    where,
+    select: {
+      mode: true,
+      outcome: true,
+      rMultiple: true,
+      pnlAmount: true,
+      closedAt: true,
+    },
   });
 
   const overall = calcStats(all);
@@ -71,6 +101,14 @@ export default async function EstatisticasPage() {
   const seriesSmc = buildSeries(all.filter((t) => t.mode === "SMC"));
   const seriesClassico = buildSeries(all.filter((t) => t.mode === "CLASSICO"));
 
+  const heatmapTrades: TradePoint[] = all
+    .filter((t) => t.closedAt && t.rMultiple !== null && t.outcome !== "OPEN")
+    .map((t) => ({
+      closedAt: (t.closedAt as Date).toISOString(),
+      rMultiple: t.rMultiple as number,
+      outcome: t.outcome as "WIN" | "LOSS" | "BREAKEVEN",
+    }));
+
   const winner =
     smc.totalR > classico.totalR
       ? "SMC"
@@ -80,11 +118,14 @@ export default async function EstatisticasPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight">Estatísticas</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Performance consolidada e comparativo entre os modos de análise.
-        </p>
+      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Estatísticas</h1>
+          <p className="mt-1 text-sm text-zinc-400">
+            Performance consolidada e comparativo entre os modos de análise.
+          </p>
+        </div>
+        <PeriodFilter />
       </div>
 
       <section className="mb-8">
@@ -108,6 +149,10 @@ export default async function EstatisticasPage() {
       </section>
 
       <section className="mb-8">
+        <PerformanceHeatmap trades={heatmapTrades} />
+      </section>
+
+      <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-[10px] uppercase tracking-widest text-zinc-500">Comparativo por modo</h2>
           {winner && overall.total >= 5 && (
@@ -125,7 +170,7 @@ export default async function EstatisticasPage() {
 
       {overall.total === 0 && (
         <div className="glass rounded-xl p-8 text-center text-sm text-zinc-400">
-          Você ainda não tem trades fechados. Catalogue suas operações no{" "}
+          Sem trades fechados no período selecionado. Catalogue suas operações no{" "}
           <a href="/dashboard/diario" className="text-emerald-400 underline-offset-2 hover:underline">
             Diário
           </a>{" "}

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BookOpen, Crosshair } from "lucide-react";
+import { BarChart3, BookOpen, Crosshair, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/dashboard", icon: Crosshair, label: "Análise" },
   { href: "/dashboard/diario", icon: BookOpen, label: "Diário" },
   { href: "/dashboard/estatisticas", icon: BarChart3, label: "Estatísticas" },
+  { href: "/dashboard/mt5", icon: Zap, label: "MT5" },
 ];
 
 export function SidebarNav() {

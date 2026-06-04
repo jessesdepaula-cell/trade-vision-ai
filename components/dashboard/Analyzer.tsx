@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AnnotatedChart, buildAnnotationData } from "./AnnotatedChart";
 import { TradeFormButton } from "./TradeForm";
+import { Mt5SendButton } from "./Mt5SendButton";
 
 type Mode = "CLASSICO" | "SMC";
 
@@ -568,29 +569,47 @@ function ResultPanel({
         </p>
       </div>
 
-      {/* Registrar trade */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4">
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-emerald-400">
-            Catalogar
-          </p>
-          <p className="mt-0.5 text-sm text-offwhite">
-            Registre este setup no seu diário e acompanhe o resultado.
-          </p>
-        </div>
-        <TradeFormButton
-          label="Registrar como trade"
-          prefill={{
-            asset: v.ativo_identificado,
-            timeframe: v.timeframe_identificado,
-            mode,
-            direction: a.direcao?.startsWith("COMPRA") ? "BUY" : a.direcao?.startsWith("VENDA") ? "SELL" : "BUY",
-            entryPrice: a.entrada?.preco,
-            stopPrice: a.stop_loss?.preco,
-            targetPrice: alvos.find((al) => al.nivel === recomendado)?.preco ?? alvos[0]?.preco,
-          }}
-        />
-      </div>
+      {/* Ações: catalogar + enviar MT5 */}
+      {(() => {
+        const dirSide: "BUY" | "SELL" = a.direcao?.startsWith("VENDA") ? "SELL" : "BUY";
+        const tgtPrice = alvos.find((al) => al.nivel === recomendado)?.preco ?? alvos[0]?.preco;
+        return (
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-emerald-400">Catalogar</p>
+                <p className="mt-0.5 text-xs text-zinc-300">Salve no diário pra acompanhar o resultado.</p>
+              </div>
+              <TradeFormButton
+                label="Registrar trade"
+                prefill={{
+                  asset: v.ativo_identificado,
+                  timeframe: v.timeframe_identificado,
+                  mode,
+                  direction: dirSide,
+                  entryPrice: a.entrada?.preco,
+                  stopPrice: a.stop_loss?.preco,
+                  targetPrice: tgtPrice,
+                }}
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-amber-400">Executar</p>
+                <p className="mt-0.5 text-xs text-zinc-300">Enfileira a ordem para seu MT5 conectado.</p>
+              </div>
+              <Mt5SendButton
+                asset={v.ativo_identificado}
+                direction={dirSide}
+                entryPrice={a.entrada?.preco}
+                stopPrice={a.stop_loss?.preco}
+                targetPrice={tgtPrice}
+              />
+            </div>
+          </div>
+        );
+      })()}
 
       <p className="text-center text-[10px] text-zinc-600">
         Conteúdo educacional. Não constitui recomendação de investimento.

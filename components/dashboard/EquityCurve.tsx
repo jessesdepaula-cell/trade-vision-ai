@@ -16,7 +16,55 @@ export type EquitySeries = {
   points: EquityPoint[];
 };
 
-export function EquityCurve({ series }: { series: EquitySeries[] }) {
+type DrawdownInfo = {
+  maxDD: number;
+  peakIdx: number;
+  troughIdx: number;
+  peakDate: string;
+  troughDate: string;
+  peakValue: number;
+  troughValue: number;
+};
+
+function computeDrawdown(points: EquityPoint[]): DrawdownInfo | null {
+  if (points.length < 2) return null;
+  let peak = points[0].cum;
+  let peakIdx = 0;
+  let currentPeakIdx = 0;
+  let maxDD = 0;
+  let ddPeakIdx = 0;
+  let ddTroughIdx = 0;
+  for (let i = 0; i < points.length; i++) {
+    if (points[i].cum > peak) {
+      peak = points[i].cum;
+      currentPeakIdx = i;
+    }
+    const dd = peak - points[i].cum;
+    if (dd > maxDD) {
+      maxDD = dd;
+      ddPeakIdx = currentPeakIdx;
+      ddTroughIdx = i;
+    }
+  }
+  if (maxDD <= 0) return null;
+  return {
+    maxDD,
+    peakIdx: ddPeakIdx,
+    troughIdx: ddTroughIdx,
+    peakDate: points[ddPeakIdx].date,
+    troughDate: points[ddTroughIdx].date,
+    peakValue: points[ddPeakIdx].cum,
+    troughValue: points[ddTroughIdx].cum,
+  };
+}
+
+export function EquityCurve({
+  series,
+  showDrawdown = true,
+}: {
+  series: EquitySeries[];
+  showDrawdown?: boolean;
+}) {
   const [hidden, setHidden] = useState<Record<string, boolean>>({});
   const [hoverX, setHoverX] = useState<number | null>(null);
 
@@ -59,6 +107,13 @@ export function EquityCurve({ series }: { series: EquitySeries[] }) {
 
   const zeroY = yScale(0);
   const yTicks = computeTicks(yMin, yMax, 4);
+
+  // Drawdown calculado em cima da série Total (a primeira)
+  const totalSeries = visible[0];
+  const drawdown =
+    showDrawdown && totalSeries && totalSeries.points.length >= 2
+      ? computeDrawdown(totalSeries.points)
+      : null;
 
   // hover tooltip data: pick nearest point per visible series
   const hoverData = useMemo(() => {
@@ -189,6 +244,47 @@ export function EquityCurve({ series }: { series: EquitySeries[] }) {
             strokeWidth="1"
             strokeDasharray="3 3"
           />
+
+          {/* Drawdown — faixa rosa entre topo e fundo */}
+          {drawdown && (
+            (() => {
+              const px1 = xScale(new Date(drawdown.peakDate).getTime());
+              const px2 = xScale(new Date(drawdown.troughDate).getTime());
+              const pyTop = yScale(drawdown.peakValue);
+              const pyBottom = yScale(drawdown.troughValue);
+              return (
+                <g>
+                  <rect
+                    x={px1}
+                    y={pyTop}
+                    width={Math.max(2, px2 - px1)}
+                    height={Math.max(2, pyBottom - pyTop)}
+                    fill="rgba(244,63,94,0.10)"
+                    stroke="rgba(244,63,94,0.25)"
+                    strokeDasharray="2 3"
+                  />
+                  <line
+                    x1={padL}
+                    y1={pyBottom}
+                    x2={W - padR}
+                    y2={pyBottom}
+                    stroke="rgba(244,63,94,0.35)"
+                    strokeWidth="1"
+                    strokeDasharray="1 3"
+                  />
+                  <text
+                    x={px2 + 6}
+                    y={pyBottom - 4}
+                    fontSize="10"
+                    fill="rgb(251,113,133)"
+                    fontFamily="JetBrains Mono, monospace"
+                  >
+                    DD máx: -{drawdown.maxDD.toFixed(2)}R
+                  </text>
+                </g>
+              );
+            })()
+          )}
 
           {/* Curves: area + line */}
           {visible.map((s) => {
