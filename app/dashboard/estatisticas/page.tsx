@@ -2,6 +2,7 @@ import { Activity, Crosshair, TrendingDown, TrendingUp } from "lucide-react";
 import { getOrCreateUser } from "@/lib/subscription";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
+import { EquityCurve, type EquityPoint } from "@/components/dashboard/EquityCurve";
 
 export const dynamic = "force-dynamic";
 
@@ -33,18 +34,42 @@ function calcStats(trades: { outcome: string; rMultiple: number | null; pnlAmoun
   return { total, wins, losses, breakeven, open, winRate, totalR, avgR, pnlSum };
 }
 
+function buildSeries(
+  trades: { rMultiple: number | null; closedAt: Date | null }[],
+): EquityPoint[] {
+  let cum = 0;
+  return trades
+    .filter((t) => t.closedAt && t.rMultiple !== null)
+    .sort(
+      (a, b) =>
+        (a.closedAt as Date).getTime() - (b.closedAt as Date).getTime(),
+    )
+    .map((t) => {
+      cum += t.rMultiple as number;
+      return {
+        date: (t.closedAt as Date).toISOString(),
+        cum: Number(cum.toFixed(2)),
+        r: t.rMultiple as number,
+      };
+    });
+}
+
 export default async function EstatisticasPage() {
   const user = await getOrCreateUser();
   if (!user) return null;
 
   const all = await prisma.trade.findMany({
     where: { userId: user.id },
-    select: { mode: true, outcome: true, rMultiple: true, pnlAmount: true },
+    select: { mode: true, outcome: true, rMultiple: true, pnlAmount: true, closedAt: true },
   });
 
   const overall = calcStats(all);
   const smc = calcStats(all.filter((t) => t.mode === "SMC"));
   const classico = calcStats(all.filter((t) => t.mode === "CLASSICO"));
+
+  const seriesAll = buildSeries(all);
+  const seriesSmc = buildSeries(all.filter((t) => t.mode === "SMC"));
+  const seriesClassico = buildSeries(all.filter((t) => t.mode === "CLASSICO"));
 
   const winner =
     smc.totalR > classico.totalR
@@ -70,6 +95,16 @@ export default async function EstatisticasPage() {
           <KpiCard label="R acumulado" value={`${overall.totalR >= 0 ? "+" : ""}${overall.totalR.toFixed(2)}R`} tone={overall.totalR >= 0 ? "emerald" : "rose"} />
           <KpiCard label="P&L total" value={formatPnl(overall.pnlSum)} tone={overall.pnlSum >= 0 ? "emerald" : "rose"} />
         </div>
+      </section>
+
+      <section className="mb-8">
+        <EquityCurve
+          series={[
+            { name: "Total", color: "#F5F5F7", points: seriesAll },
+            { name: "SMC", color: "#10B981", points: seriesSmc },
+            { name: "Clássico", color: "#F59E0B", points: seriesClassico },
+          ]}
+        />
       </section>
 
       <section className="mb-8">
