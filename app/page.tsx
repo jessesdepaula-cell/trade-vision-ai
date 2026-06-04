@@ -35,7 +35,7 @@ export default function LandingPage() {
       <section className="relative z-10 mx-auto max-w-4xl px-6 pb-24 pt-20 text-center">
         <div className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-zinc-400">
           <Sparkle className="h-3 w-3 text-amber-500" />
-          Análise institucional movida por Claude Vision
+          Análise institucional movida por IA com visão computacional
         </div>
 
         <h1 className="text-balance text-5xl font-semibold tracking-tight md:text-7xl">
@@ -101,7 +101,7 @@ export default function LandingPage() {
           },
           {
             icon: ShieldCheck,
-            title: "Quality Gate",
+            title: "Filtro de Qualidade",
             body: "Se o gráfico não é legível, a IA recusa. Sem entradas inventadas. Sem ruído.",
           },
         ].map(({ icon: Icon, title, body }) => (
