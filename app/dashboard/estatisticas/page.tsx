@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { EquityCurve, type EquityPoint } from "@/components/dashboard/EquityCurve";
 import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
 import { PerformanceHeatmap, type TradePoint } from "@/components/dashboard/PerformanceHeatmap";
+import { ModeAccuracyMeter } from "@/components/dashboard/ModeAccuracyMeter";
+import { getModeStats } from "@/lib/modeStats";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +103,8 @@ export default async function EstatisticasPage({
   const seriesSmc = buildSeries(all.filter((t) => t.mode === "SMC"));
   const seriesClassico = buildSeries(all.filter((t) => t.mode === "CLASSICO"));
 
+  const modeStats = await getModeStats(user.id);
+
   const heatmapTrades: TradePoint[] = all
     .filter((t) => t.closedAt && t.rMultiple !== null && t.outcome !== "OPEN")
     .map((t) => ({
@@ -127,6 +131,11 @@ export default async function EstatisticasPage({
         </div>
         <PeriodFilter />
       </div>
+
+      <section className="mb-8">
+        <h2 className="mb-3 text-[10px] uppercase tracking-widest text-zinc-500">Assertividade por modo</h2>
+        <ModeAccuracyMeter smc={modeStats.smc} classico={modeStats.classico} />
+      </section>
 
       <section className="mb-8">
         <h2 className="mb-3 text-[10px] uppercase tracking-widest text-zinc-500">Visão geral</h2>

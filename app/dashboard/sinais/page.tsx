@@ -2,6 +2,8 @@ import { Radar } from "lucide-react";
 import { getOrCreateUser } from "@/lib/subscription";
 import { prisma } from "@/lib/prisma";
 import { SignalCard, type SignalData } from "@/components/dashboard/SignalCard";
+import { ModeAccuracyMeter } from "@/components/dashboard/ModeAccuracyMeter";
+import { getModeStats } from "@/lib/modeStats";
 import { AutoRefresh } from "./AutoRefresh";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +62,8 @@ export default async function SinaisPage({
   const totalClosed = stats.won + stats.lost;
   const winRate = totalClosed > 0 ? (stats.won / totalClosed) * 100 : 0;
 
+  const modeStats = await getModeStats(user.id);
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
       <AutoRefresh intervalMs={10000} />
@@ -90,6 +94,14 @@ export default async function SinaisPage({
           <FilterChip param="status" value="fechados" label="Fechados" active={statusFilter === "fechados"} />
         </div>
       </div>
+
+      {/* Medidor de assertividade por modo */}
+      <section className="mb-6">
+        <h2 className="mb-3 text-[10px] uppercase tracking-widest text-zinc-500">
+          Assertividade por modo de análise
+        </h2>
+        <ModeAccuracyMeter smc={modeStats.smc} classico={modeStats.classico} />
+      </section>
 
       <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Kpi label="Pendentes" value={stats.pending} tone="amber" />
