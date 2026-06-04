@@ -11,3 +11,5 @@ out
 .vscode
 prisma/migrations/dev.db*
 next-env.d.ts
+
+.vercel
