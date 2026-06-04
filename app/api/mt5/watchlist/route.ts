@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_WATCHLIST } from "@/lib/watchlistDefaults";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,16 @@ export async function GET(req: Request) {
   if (!token) return NextResponse.json({ error: "token obrigatório" }, { status: 401 });
   const account = await prisma.mT5Account.findUnique({ where: { apiToken: token } });
   if (!account) return NextResponse.json({ error: "token inválido" }, { status: 401 });
+
+  // Auto-seed: se a conta não tem watchlist, semeia agora
+  const count = await prisma.watchlist.count({ where: { accountId: account.id } });
+  if (count === 0) {
+    for (const w of DEFAULT_WATCHLIST) {
+      await prisma.watchlist
+        .create({ data: { accountId: account.id, ...w, active: true } })
+        .catch(() => null);
+    }
+  }
 
   const items = await prisma.watchlist.findMany({
     where: { accountId: account.id, active: true },
