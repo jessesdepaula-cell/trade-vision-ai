@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { AnnotatedChart, buildAnnotationData } from "./AnnotatedChart";
 import { TradeFormButton } from "./TradeForm";
 import { Mt5SendButton } from "./Mt5SendButton";
+import { SmcChecklist } from "./SmcChecklist";
 
 type Mode = "CLASSICO" | "SMC";
 
@@ -54,6 +55,8 @@ type Analysis = {
     razao_alvo_recomendado?: string;
     risco_retorno_estimado?: string;
     justificativa?: string;
+    tipo_setup?: string;
+    checklist_smc?: Record<string, boolean>;
   };
   escala_visivel?: { preco_topo?: string; preco_base?: string };
 };
@@ -448,6 +451,11 @@ function ResultPanel({
           {a.estrutura_ou_tendencia ?? "—"}
         </p>
       </div>
+
+      {/* Checklist SMC */}
+      {result.modo_aplicado === "SMC" && a.checklist_smc && (
+        <SmcChecklist data={a.checklist_smc} tipoSetup={a.tipo_setup} />
+      )}
 
       {/* Entrada */}
       <div className="glass rounded-xl p-4">

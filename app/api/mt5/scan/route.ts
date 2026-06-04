@@ -67,6 +67,8 @@ export async function POST(req: Request) {
       riskReward: result.riskReward ?? null,
       structure: result.structure ?? null,
       justification: result.justification ?? null,
+      tipoSetup: result.tipo_setup ?? null,
+      checklistSmc: result.checklist_smc ? (result.checklist_smc as object) : undefined,
       status: result.hasSetup ? "PENDING" : "NO_SETUP",
       candleData: candles.slice(-40) as object,
     },

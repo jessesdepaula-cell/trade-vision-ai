@@ -2,22 +2,26 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { requireActiveSubscription } from "@/lib/subscription";
 import { prisma } from "@/lib/prisma";
+import { smcSystemPrompt } from "@/lib/smcManual";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 type Mode = "CLASSICO" | "SMC";
 
-const SYSTEM_PROMPT = (mode: Mode) => `Você é um Analista Financeiro Institucional de Elite e especialista em Visão Computacional. Sua tarefa é analisar a imagem de um gráfico financeiro fornecida e retornar APENAS um objeto JSON válido, sem markdown, sem texto explicativo fora do JSON.
-O modo de análise solicitado é: ${mode}.
+const SMC_SYSTEM_PROMPT = smcSystemPrompt({ withImage: true, jsonShape: "analyze" });
+
+const SYSTEM_PROMPT = (mode: Mode) => mode === "SMC" ? SMC_SYSTEM_PROMPT : CLASSICO_SYSTEM_PROMPT;
+
+const CLASSICO_SYSTEM_PROMPT = `Você é um Analista Financeiro Institucional de Elite e especialista em Visão Computacional. Sua tarefa é analisar a imagem de um gráfico financeiro fornecida e retornar APENAS um objeto JSON válido, sem markdown, sem texto explicativo fora do JSON.
+Modo de análise: CLÁSSICO (Tendência + Suportes/Resistências + Padrões de candles).
 
 PASSO 1: PORTÃO DE QUALIDADE (QUALITY GATE)
 Verifique visualmente se a imagem contém: 1. Nome do ativo legível. 2. Timeframe legível. 3. Escala de preços legível. 4. Contexto suficiente (30-50 velas). 5. Imagem nítida.
 SE QUALQUER ITEM FALTAR: Retorne {"status": "INVALIDO", "mensagem_erro": "Explique exatamente o que falta"}. NÃO INVENTE DADOS.
 
 PASSO 2: ANÁLISE TÉCNICA (Se "status": "VALIDO")
-- Se "CLASSICO": Foque em Tendência, Suportes/Resistências, Padrões de Velas/Gráficos.
-- Se "SMC": Foque em Estrutura (BOS/CHoCH), POIs (Order Blocks, FVG/Imbalances) e Liquidez (Equal Highs/Lows).
+Foque em Tendência, Suportes/Resistências, Padrões de Velas/Gráficos.
 
 PASSO 3: PLANO DE TRADE — OBJETIVO E ACIONÁVEL
 

@@ -152,6 +152,8 @@ export default async function SinaisPage({
                   filledAt: s.filledAt?.toISOString() ?? null,
                   closedAt: s.closedAt?.toISOString() ?? null,
                   candleData: (s.candleData as SignalData["candleData"]) ?? null,
+                  tipoSetup: s.tipoSetup,
+                  checklistSmc: (s.checklistSmc as Record<string, boolean> | null) ?? null,
                 } satisfies SignalData
               }
             />

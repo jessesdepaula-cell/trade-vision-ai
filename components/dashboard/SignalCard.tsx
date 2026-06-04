@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { Clock, Target, TrendingDown, TrendingUp } from "lucide-react";
+import { SmcChecklist } from "./SmcChecklist";
 
 export type SignalData = {
   id: string;
@@ -28,6 +29,8 @@ export type SignalData = {
   filledAt: string | null;
   closedAt: string | null;
   candleData: { o: number; h: number; l: number; c: number }[] | null;
+  tipoSetup: string | null;
+  checklistSmc: Record<string, boolean> | null;
 };
 
 export function SignalCard({ signal: s }: { signal: SignalData }) {
@@ -139,6 +142,11 @@ export function SignalCard({ signal: s }: { signal: SignalData }) {
             <p className="text-xs leading-relaxed text-zinc-300">
               {s.justification}
             </p>
+          )}
+
+          {/* Checklist SMC */}
+          {s.mode === "SMC" && s.checklistSmc && (
+            <SmcChecklist data={s.checklistSmc} tipoSetup={s.tipoSetup} />
           )}
 
           {/* Resultado se fechado */}
