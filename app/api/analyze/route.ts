@@ -69,8 +69,14 @@ FORMATO JSON OBRIGATÓRIO:
     "razao_alvo_recomendado": "string (1 frase)",
     "risco_retorno_estimado": "string",
     "justificativa": "string (2-3 frases)"
+  },
+  "escala_visivel": {
+    "preco_topo": "string (maior preço visível na escala da imagem, ex: '1.0920')",
+    "preco_base": "string (menor preço visível na escala da imagem, ex: '1.0780')"
   }
-}`;
+}
+
+IMPORTANTE: O bloco "escala_visivel" é OBRIGATÓRIO quando status=VALIDO. Leia os preços extremos da régua de preços da imagem — esses valores serão usados para desenhar linhas no gráfico do usuário, então precisam ser precisos.`;
 
 function cleanJson(raw: string): string {
   let s = raw.trim();

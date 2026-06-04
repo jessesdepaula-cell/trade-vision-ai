@@ -6,6 +6,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   Crosshair,
+  Eye,
+  EyeOff,
   Image as ImageIcon,
   Loader2,
   Star,
@@ -16,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AnnotatedChart, buildAnnotationData } from "./AnnotatedChart";
 
 type Mode = "CLASSICO" | "SMC";
 
@@ -50,6 +53,7 @@ type Analysis = {
     risco_retorno_estimado?: string;
     justificativa?: string;
   };
+  escala_visivel?: { preco_topo?: string; preco_base?: string };
 };
 
 const LOADING_STAGES = [
@@ -70,6 +74,7 @@ export function Analyzer() {
   const [stage, setStage] = useState(0);
   const [result, setResult] = useState<Analysis | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showAnnotations, setShowAnnotations] = useState(true);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const readFile = useCallback((file: File) => {
@@ -172,14 +177,22 @@ export function Analyzer() {
         >
           {imageData ? (
             <div className="relative w-full">
-              <Image
-                src={imageData}
-                alt={fileName ?? "gráfico"}
-                width={1200}
-                height={700}
-                className="mx-auto max-h-[360px] w-auto rounded-md border border-white/10 object-contain"
-                unoptimized
-              />
+              {result?.status === "VALIDO" && showAnnotations ? (
+                <AnnotatedChart
+                  src={imageData}
+                  data={buildAnnotationData(result)}
+                  alt={fileName ?? "gráfico anotado"}
+                />
+              ) : (
+                <Image
+                  src={imageData}
+                  alt={fileName ?? "gráfico"}
+                  width={1200}
+                  height={700}
+                  className="mx-auto max-h-[420px] w-auto rounded-md border border-white/10 object-contain"
+                  unoptimized
+                />
+              )}
               <button
                 onClick={() => {
                   setImageData(null);
@@ -191,6 +204,24 @@ export function Analyzer() {
               >
                 <X className="h-3.5 w-3.5" />
               </button>
+              {result?.status === "VALIDO" && (
+                <button
+                  onClick={() => setShowAnnotations((s) => !s)}
+                  className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-charcoal/70 px-2 py-1 text-[10px] uppercase tracking-widest text-zinc-300 hover:bg-charcoal"
+                >
+                  {showAnnotations ? (
+                    <>
+                      <EyeOff className="h-3 w-3" />
+                      Original
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-3 w-3" />
+                      Anotada
+                    </>
+                  )}
+                </button>
+              )}
               {fileName && (
                 <p className="num mt-3 truncate text-center text-xs text-zinc-500">
                   {fileName}
