@@ -52,6 +52,28 @@ function candlesToText(candles: Candle[]): string {
     .join("\n");
 }
 
+/** Tabela mais compacta — útil para HTF que precisa menos detalhe */
+function candlesCompact(candles: Candle[]): string {
+  return candles
+    .map((c) => {
+      const d = new Date(c.t * 1000).toISOString().slice(5, 16).replace("T", " ");
+      return `${d} ${c.o}/${c.h}/${c.l}/${c.c}`;
+    })
+    .join("\n");
+}
+
+function htfFor(tf: string): string {
+  switch (tf) {
+    case "M5": return "H1";
+    case "M15": return "H1";
+    case "M30": return "H4";
+    case "H1": return "H4";
+    case "H4": return "D1";
+    case "D1": return "W1";
+    default: return "H1";
+  }
+}
+
 const SMC_PROMPT = smcSystemPrompt({ withImage: false, jsonShape: "scan" });
 const CLASSICO_PROMPT = classicoSystemPrompt({ jsonShape: "scan" });
 
@@ -116,17 +138,25 @@ export async function scanWithAI(input: {
   timeframe: string;
   mode: "SMC" | "CLASSICO";
   candles: Candle[];
+  htfCandles?: Candle[];
 }): Promise<ScanResult> {
   if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY ausente");
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const model = pickModel(input.mode);
 
-  const userText = `Símbolo: ${input.symbol}
-Timeframe: ${input.timeframe}
-Últimas ${input.candles.length} velas (mais recentes ao final):
-${candlesToText(input.candles)}
+  const htfTf = htfFor(input.timeframe);
+  const htfSection =
+    input.htfCandles && input.htfCandles.length > 0
+      ? `\n\nCONTEXTO HTF (timeframe superior ${htfTf}, ${input.htfCandles.length} velas — use para validar o viés macro):
+${candlesCompact(input.htfCandles)}`
+      : "";
 
-Há um SETUP CLARO operacional AGORA? Retorne o JSON conforme especificado.`;
+  const userText = `Símbolo: ${input.symbol}
+Timeframe principal (LTF): ${input.timeframe}
+Últimas ${input.candles.length} velas LTF (mais recentes ao final):
+${candlesToText(input.candles)}${htfSection}
+
+Há um SETUP CLARO operacional AGORA? Use o contexto HTF para validar o viés. Retorne o JSON conforme especificado.`;
 
   const completion = await openai.chat.completions.create({
     model,

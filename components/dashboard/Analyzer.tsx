@@ -23,6 +23,7 @@ import { TradeFormButton } from "./TradeForm";
 import { Mt5SendButton } from "./Mt5SendButton";
 import { SmcChecklist } from "./SmcChecklist";
 import { ClassicoChecklist } from "./ClassicoChecklist";
+import { MovingAveragesCard, type MovingAveragesData } from "./MovingAveragesCard";
 
 type Mode = "CLASSICO" | "SMC";
 
@@ -59,6 +60,7 @@ type Analysis = {
     tipo_setup?: string;
     checklist_smc?: Record<string, boolean>;
     checklist_classico?: Record<string, boolean>;
+    medias_atuais?: MovingAveragesData;
   };
   escala_visivel?: { preco_topo?: string; preco_base?: string };
 };
@@ -460,6 +462,11 @@ function ResultPanel({
       )}
       {result.modo_aplicado === "CLASSICO" && a.checklist_classico && (
         <ClassicoChecklist data={a.checklist_classico} tipoSetup={a.tipo_setup} />
+      )}
+
+      {/* Médias móveis identificadas (Clássico) */}
+      {result.modo_aplicado === "CLASSICO" && a.medias_atuais && (
+        <MovingAveragesCard data={a.medias_atuais} />
       )}
 
       {/* Entrada */}

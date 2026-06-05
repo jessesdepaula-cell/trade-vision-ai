@@ -61,7 +61,9 @@ export function SignalChart({
   defaultShowMA?: boolean;
 }) {
   const dec = useMemo(() => decimals(symbol), [symbol]);
-  const initialVisible = Math.min(candles.length, 80);
+  // Mantém 50 velas visíveis por padrão para sempre haver espaço para
+  // arrastar para trás (pan horizontal revela velas mais antigas).
+  const initialVisible = Math.min(candles.length, 50);
   const [view, setView] = useState<ViewState>({
     visibleCount: initialVisible,
     offset: 0,
@@ -154,35 +156,15 @@ export function SignalChart({
     return "plot";
   }
 
-  function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
-    e.preventDefault();
-    const { x, y } = clientToSvg(e.clientX, e.clientY);
-    const zone = detectZone(x, y);
-    let mode: DragMode = "pan";
-    if (zone === "yScale") mode = "zoomY";
-    else if (zone === "xScale") mode = "zoomX";
-    dragRef.current = {
-      mode,
-      startX: e.clientX,
-      startY: e.clientY,
-      startView: { ...view },
-    };
-    try {
-      (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    } catch {
-      // alguns navegadores/elementos podem rejeitar — drag continua via listeners
-    }
-  }
-
-  function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
-    const { x, y } = clientToSvg(e.clientX, e.clientY);
-    setCursor({ x, y });
+  function applyDragMove(clientX: number, clientY: number) {
     const drag = dragRef.current;
     if (!drag || !drag.mode) return;
-    const svg = svgRef.current!;
+    const svg = svgRef.current;
+    if (!svg) return;
     const rect = svg.getBoundingClientRect();
-    const dxPx = e.clientX - drag.startX;
-    const dyPx = e.clientY - drag.startY;
+    if (rect.width === 0 || rect.height === 0) return;
+    const dxPx = clientX - drag.startX;
+    const dyPx = clientY - drag.startY;
     if (drag.mode === "pan") {
       // pan horizontal (tempo) — arraste para a direita revela velas mais antigas
       const dxPct = dxPx / rect.width;
@@ -202,7 +184,6 @@ export function SignalChart({
       setView((v) => ({ ...v, yZoom: newZoom }));
     } else if (drag.mode === "zoomX") {
       const dxPct = dxPx / rect.width;
-      // arrastar pra direita = zoom out (mais velas), esquerda = zoom in
       const factor = 1 + dxPct * 2;
       const newCount = Math.max(
         15,
@@ -210,6 +191,34 @@ export function SignalChart({
       );
       setView((v) => ({ ...v, visibleCount: newCount }));
     }
+  }
+
+  function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
+    // só botão primário (esquerdo do mouse) ou toque
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    e.preventDefault();
+    const { x, y } = clientToSvg(e.clientX, e.clientY);
+    const zone = detectZone(x, y);
+    let mode: DragMode = "pan";
+    if (zone === "yScale") mode = "zoomY";
+    else if (zone === "xScale") mode = "zoomX";
+    dragRef.current = {
+      mode,
+      startX: e.clientX,
+      startY: e.clientY,
+      startView: { ...view },
+    };
+    try {
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    } catch {
+      // alguns navegadores rejeitam — temos listeners globais abaixo
+    }
+  }
+
+  function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    const { x, y } = clientToSvg(e.clientX, e.clientY);
+    setCursor({ x, y });
+    applyDragMove(e.clientX, e.clientY);
   }
 
   function onPointerUp(e: React.PointerEvent<SVGSVGElement>) {
@@ -243,14 +252,26 @@ export function SignalChart({
     setView({ visibleCount: initialVisible, offset: 0, yZoom: 1, yPan: 0 });
   }
 
-  // global pointermove guard pra parar drag se solta fora
+  // Fallback global: continua aplicando o drag mesmo se o pointer sair
+  // da SVG durante o gesto e mesmo se setPointerCapture falhou.
   useEffect(() => {
+    function onMove(e: PointerEvent) {
+      if (!dragRef.current) return;
+      applyDragMove(e.clientX, e.clientY);
+    }
     function onUp() {
       dragRef.current = null;
     }
+    window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
-    return () => window.removeEventListener("pointerup", onUp);
-  }, []);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candles.length]);
 
   const isZoomedOrPanned =
     view.visibleCount !== initialVisible ||

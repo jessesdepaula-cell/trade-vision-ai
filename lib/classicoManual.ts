@@ -119,6 +119,17 @@ const analyzeJsonShape = `FORMATO JSON DE SAÍDA (obrigatório, sem markdown):
       "volume_pullback_decrescente": boolean,
       "candle_gatilho_valido": boolean
     },
+    "medias_atuais": {
+      "ema9": "string (valor numérico atual lido do gráfico)",
+      "ema9_slope": "ALTA" | "BAIXA" | "LATERAL",
+      "ema20": "string (valor numérico atual)",
+      "ema20_slope": "ALTA" | "BAIXA" | "LATERAL",
+      "ema50": "string (valor numérico atual)",
+      "ema50_slope": "ALTA" | "BAIXA" | "LATERAL",
+      "sma200": "string (valor numérico atual)",
+      "sma200_slope": "ALTA" | "BAIXA" | "LATERAL",
+      "distancia_ema9_ema50_pct": "string ex: '0.82%' (para detectar spaghetti)"
+    },
     "estrutura_ou_tendencia": "string (descreve alinhamento das médias, qual média foi tocada, qual a confluência, qual o gatilho)",
     "entrada": { "preco": "string", "zona": "string", "tipo": "Buy Stop 1 tick acima do gatilho" | "Sell Stop 1 tick abaixo do gatilho" | "..." },
     "stop_loss": { "preco": "string", "justificativa_estrutural": "string (cita gatilho ou EMA 50)" },

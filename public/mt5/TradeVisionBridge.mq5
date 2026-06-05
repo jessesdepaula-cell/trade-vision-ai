@@ -18,6 +18,7 @@ input int     HeartbeatSeconds = 5;         // envia info da conta e ticks
 input int     PollSeconds      = 3;         // polling da fila de ordens (Bridge)
 input int     ScanIntervalMin  = 15;        // mínimo entre scans do mesmo símbolo
 input int     CandlesPerScan   = 250;       // velas enviadas por scan (precisa >=200 para SMA 200)
+input int     HtfCandlesPerScan = 60;       // velas do HTF (timeframe superior) enviadas como contexto
 input double  DefaultVolume    = 0.01;
 input bool    AllowMarket      = true;
 input bool    AllowPending     = true;
@@ -265,7 +266,9 @@ void ScanSymbol(string watchId, string symbol, string timeframe, string mode)
    string realSym = ResolveSymbol(symbol);
    if(realSym == "") return;
    ENUM_TIMEFRAMES tf = TfFromString(timeframe);
+   ENUM_TIMEFRAMES htf = HtfOf(tf);
 
+   // LTF
    MqlRates rates[];
    int copied = CopyRates(realSym, tf, 0, CandlesPerScan, rates);
    if(copied < 20)
@@ -284,13 +287,34 @@ void ScanSymbol(string watchId, string symbol, string timeframe, string mode)
    }
    candles += "]";
 
+   // HTF contexto
+   string htfCandles = "[]";
+   if(HtfCandlesPerScan > 0)
+   {
+      MqlRates htfRates[];
+      int hcopied = CopyRates(realSym, htf, 0, HtfCandlesPerScan, htfRates);
+      if(hcopied >= 5)
+      {
+         htfCandles = "[";
+         for(int i = 0; i < hcopied; i++)
+         {
+            if(i > 0) htfCandles += ",";
+            htfCandles += StringFormat("{\"t\":%I64d,\"o\":%.5f,\"h\":%.5f,\"l\":%.5f,\"c\":%.5f}",
+                                       (long)htfRates[i].time, htfRates[i].open, htfRates[i].high,
+                                       htfRates[i].low, htfRates[i].close);
+         }
+         htfCandles += "]";
+      }
+   }
+
    string payload = StringFormat(
-      "{\"watchlistId\":\"%s\",\"symbol\":\"%s\",\"timeframe\":\"%s\",\"mode\":\"%s\",\"candles\":%s}",
-      watchId, realSym, timeframe, mode, candles
+      "{\"watchlistId\":\"%s\",\"symbol\":\"%s\",\"timeframe\":\"%s\",\"mode\":\"%s\",\"candles\":%s,\"htfCandles\":%s}",
+      watchId, realSym, timeframe, mode, candles, htfCandles
    );
 
    string url = ApiBaseUrl + "/api/mt5/scan?token=" + ApiToken;
-   Print("[TradeVision] Scan ", realSym, " ", timeframe, " ", mode, " (", copied, " velas)");
+   Print("[TradeVision] Scan ", realSym, " ", timeframe, " ", mode,
+         " (", copied, " LTF + ", (htfCandles == "[]" ? 0 : HtfCandlesPerScan), " HTF velas)");
    HttpPost(url, payload);
 }
 
@@ -303,6 +327,17 @@ ENUM_TIMEFRAMES TfFromString(string s)
    if(s == "H4")  return PERIOD_H4;
    if(s == "D1")  return PERIOD_D1;
    return PERIOD_M15;
+}
+
+ENUM_TIMEFRAMES HtfOf(ENUM_TIMEFRAMES tf)
+{
+   if(tf == PERIOD_M5)  return PERIOD_H1;
+   if(tf == PERIOD_M15) return PERIOD_H1;
+   if(tf == PERIOD_M30) return PERIOD_H4;
+   if(tf == PERIOD_H1)  return PERIOD_H4;
+   if(tf == PERIOD_H4)  return PERIOD_D1;
+   if(tf == PERIOD_D1)  return PERIOD_W1;
+   return PERIOD_H1;
 }
 
 //+------------------------------------------------------------------+

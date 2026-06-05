@@ -42,23 +42,49 @@ export default async function SinaisPage({
     // mostrar WIN/LOSS — handle via post filter
   }
 
-  const signals = await prisma.signal.findMany({
+  // Pega janela maior para conseguir agregar histórico de fechados, mas
+  // depois reduz a 1 sinal por (símbolo, timeframe, modo) — o mais recente.
+  // Exceção: sinais já fechados (WIN/LOSS) ou em execução (FILLED) ficam
+  // visíveis individualmente para o usuário ver o histórico ativo.
+  const allRecent = await prisma.signal.findMany({
     where,
     orderBy: { scannedAt: "desc" },
-    take: 60,
+    take: 300,
   });
 
-  let visible = signals;
-  if (statusFilter === "fechados")
-    visible = signals.filter((s) => s.status === "WIN" || s.status === "LOSS");
+  const seen = new Set<string>();
+  const deduped: typeof allRecent = [];
+  for (const s of allRecent) {
+    // mantém sempre os ativos/fechados (WIN/LOSS/FILLED/PENDING) — só dedupa
+    // a fila de "sem setup" / EXPIRED para não poluir a tela
+    const isLiveOrClosed =
+      s.status === "FILLED" ||
+      s.status === "WIN" ||
+      s.status === "LOSS" ||
+      (s.status === "PENDING" && s.hasSetup);
+    if (isLiveOrClosed) {
+      deduped.push(s);
+      continue;
+    }
+    const key = `${s.symbol}|${s.timeframe}|${s.mode}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(s);
+  }
 
+  let visible = deduped;
+  if (statusFilter === "fechados")
+    visible = deduped.filter((s) => s.status === "WIN" || s.status === "LOSS");
+
+  // KPIs usam allRecent (histórico real, não dedupado)
   const stats = {
-    pending: signals.filter((s) => s.status === "PENDING").length,
-    filled: signals.filter((s) => s.status === "FILLED").length,
-    won: signals.filter((s) => s.status === "WIN").length,
-    lost: signals.filter((s) => s.status === "LOSS").length,
-    noSetup: signals.filter((s) => !s.hasSetup).length,
+    pending: allRecent.filter((s) => s.status === "PENDING" && s.hasSetup).length,
+    filled: allRecent.filter((s) => s.status === "FILLED").length,
+    won: allRecent.filter((s) => s.status === "WIN").length,
+    lost: allRecent.filter((s) => s.status === "LOSS").length,
+    noSetup: allRecent.filter((s) => !s.hasSetup).length,
   };
+  const signals = deduped; // para os contadores das abas (1 por par/modo)
   const totalClosed = stats.won + stats.lost;
   const winRate = totalClosed > 0 ? (stats.won / totalClosed) * 100 : 0;
 
@@ -228,6 +254,7 @@ function ModeTab({
         "relative inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition",
         active ? "text-offwhite" : "text-zinc-500 hover:text-zinc-300",
       )}
+      title={`${count} ${count === 1 ? "par" : "pares"} no escaneamento`}
     >
       {label}
       <span
@@ -239,7 +266,7 @@ function ModeTab({
           !active && "border-white/10 bg-white/[0.02] text-zinc-500",
         )}
       >
-        {count}
+        {count} {count === 1 ? "par" : "pares"}
       </span>
       {active && (
         <span
