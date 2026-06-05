@@ -17,7 +17,7 @@ input bool    EnableBridge     = true;      // executa ordens enviadas pelo dash
 input int     HeartbeatSeconds = 5;         // envia info da conta e ticks
 input int     PollSeconds      = 3;         // polling da fila de ordens (Bridge)
 input int     ScanIntervalMin  = 15;        // mínimo entre scans do mesmo símbolo
-input int     CandlesPerScan   = 100;       // velas enviadas por scan
+input int     CandlesPerScan   = 250;       // velas enviadas por scan (precisa >=200 para SMA 200)
 input double  DefaultVolume    = 0.01;
 input bool    AllowMarket      = true;
 input bool    AllowPending     = true;

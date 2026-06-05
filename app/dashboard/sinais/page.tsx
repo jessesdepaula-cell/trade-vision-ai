@@ -112,12 +112,18 @@ export default async function SinaisPage({
         </nav>
       </div>
 
-      {/* Medidor de assertividade por modo */}
+      {/* Medidor de assertividade por modo (segue a aba ativa) */}
       <section className="mb-6">
         <h2 className="mb-3 text-[10px] uppercase tracking-widest text-zinc-500">
           Assertividade por modo de análise
         </h2>
-        <ModeAccuracyMeter smc={modeStats.smc} classico={modeStats.classico} />
+        <ModeAccuracyMeter
+          smc={modeStats.smc}
+          classico={modeStats.classico}
+          show={
+            modoFilter === "smc" ? "smc" : modoFilter === "classico" ? "classico" : "both"
+          }
+        />
       </section>
 
       <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">

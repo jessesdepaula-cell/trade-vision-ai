@@ -26,13 +26,32 @@ const EMPTY: Omit<ModeStats, "mode"> = {
 };
 
 export async function getModeStats(userId: string): Promise<{ smc: ModeStats; classico: ModeStats }> {
-  const trades = await prisma.trade.findMany({
+  // Fonte: tabela Signal (mesma usada pelos KPIs) — garante consistência
+  // entre o medidor e os cards de "Pendentes / Em execução / Ganhos / Perdas".
+  const accounts = await prisma.mT5Account.findMany({
     where: { userId },
-    select: { mode: true, outcome: true, rMultiple: true },
+    select: { id: true },
   });
+  const accountIds = accounts.map((a) => a.id);
+
+  const signals = accountIds.length
+    ? await prisma.signal.findMany({
+        where: { accountId: { in: accountIds }, hasSetup: true },
+        select: { mode: true, status: true, rMultiple: true },
+      })
+    : [];
+
+  function statusToOutcome(s: string): "WIN" | "LOSS" | "BREAKEVEN" | "OPEN" {
+    if (s === "WIN") return "WIN";
+    if (s === "LOSS") return "LOSS";
+    if (s === "PENDING" || s === "FILLED") return "OPEN";
+    return "BREAKEVEN"; // EXPIRED, NO_SETUP, etc. — não conta no winrate
+  }
 
   function calc(mode: "SMC" | "CLASSICO"): ModeStats {
-    const subset = trades.filter((t) => t.mode === mode);
+    const subset = signals
+      .filter((s) => s.mode === mode)
+      .map((s) => ({ outcome: statusToOutcome(s.status), rMultiple: s.rMultiple }));
     const wins = subset.filter((t) => t.outcome === "WIN").length;
     const losses = subset.filter((t) => t.outcome === "LOSS").length;
     const breakeven = subset.filter((t) => t.outcome === "BREAKEVEN").length;

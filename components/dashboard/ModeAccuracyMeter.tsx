@@ -4,10 +4,26 @@ import { cn } from "@/lib/utils";
 export function ModeAccuracyMeter({
   smc,
   classico,
+  show = "both",
 }: {
   smc: ModeStats;
   classico: ModeStats;
+  show?: "both" | "smc" | "classico";
 }) {
+  if (show === "smc") {
+    return (
+      <div className="grid gap-3">
+        <AccuracyCard stats={smc} accent="emerald" />
+      </div>
+    );
+  }
+  if (show === "classico") {
+    return (
+      <div className="grid gap-3">
+        <AccuracyCard stats={classico} accent="amber" />
+      </div>
+    );
+  }
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <AccuracyCard stats={smc} accent="emerald" />

@@ -77,7 +77,7 @@ export async function POST(req: Request) {
           ? (result.checklist_classico as object)
           : undefined,
       status: result.hasSetup ? "PENDING" : "NO_SETUP",
-      candleData: candles.slice(-80) as object,
+      candleData: candles.slice(-250) as object,
     },
   });
 

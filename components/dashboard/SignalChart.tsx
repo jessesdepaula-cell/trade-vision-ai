@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { RotateCcw } from "lucide-react";
+import { Activity, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ema, sma } from "@/lib/indicators";
 
 export type ChartCandle = {
   t?: number; // unix seconds
@@ -43,6 +44,7 @@ export function SignalChart({
   exitPrice,
   rMultiple,
   scannedAt,
+  defaultShowMA = false,
 }: {
   candles: ChartCandle[];
   symbol: string;
@@ -56,6 +58,7 @@ export function SignalChart({
   exitPrice?: number | null;
   rMultiple?: number | null;
   scannedAt: string;
+  defaultShowMA?: boolean;
 }) {
   const dec = useMemo(() => decimals(symbol), [symbol]);
   const initialVisible = Math.min(candles.length, 80);
@@ -65,7 +68,19 @@ export function SignalChart({
     yZoom: 1,
     yPan: 0,
   });
+  const [showMA, setShowMA] = useState(defaultShowMA);
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
+
+  // Médias móveis computadas sobre TODA a série
+  const ma = useMemo(() => {
+    const closes = candles.map((c) => c.c);
+    return {
+      ema9: ema(closes, 9),
+      ema20: ema(closes, 20),
+      ema50: ema(closes, 50),
+      sma200: sma(closes, 200),
+    };
+  }, [candles]);
   const dragRef = useRef<{
     mode: DragMode;
     startX: number;
@@ -83,6 +98,9 @@ export function SignalChart({
     return candles.slice(total - vc - off, total - off);
   }, [candles, view.visibleCount, view.offset]);
 
+  // visible window indices (para clipar MAs)
+  const visibleStart = candles.length - visible.length - view.offset;
+
   // y range (auto-fit then scale by zoom + pan)
   const { yMin, yMax } = useMemo(() => {
     if (visible.length === 0) return { yMin: 0, yMax: 1 };
@@ -93,6 +111,16 @@ export function SignalChart({
     targets?.forEach((v) => {
       if (typeof v === "number") vals.push(v);
     });
+    // inclui MAs visíveis no ajuste do eixo Y se visíveis
+    if (showMA) {
+      const visibleEndIdx = visibleStart + visible.length;
+      [ma.ema9, ma.ema20, ma.ema50, ma.sma200].forEach((series) => {
+        for (let i = visibleStart; i < visibleEndIdx; i++) {
+          const v = series[i];
+          if (v !== null && v !== undefined) vals.push(v);
+        }
+      });
+    }
     const autoMin = Math.min(...vals);
     const autoMax = Math.max(...vals);
     const pad = Math.max((autoMax - autoMin) * 0.05, autoMax * 0.00005);
@@ -102,7 +130,7 @@ export function SignalChart({
     const half = (baseMax - baseMin) / 2 / Math.max(0.2, view.yZoom);
     const panAmount = (baseMax - baseMin) * view.yPan;
     return { yMin: center - half + panAmount, yMax: center + half + panAmount };
-  }, [visible, entry, stop, exitPrice, targets, view.yZoom, view.yPan]);
+  }, [visible, entry, stop, exitPrice, targets, view.yZoom, view.yPan, showMA, ma, visibleStart]);
 
   const range = Math.max(0.0000001, yMax - yMin);
   const candleW = innerW / Math.max(1, visible.length);
@@ -255,7 +283,6 @@ export function SignalChart({
     fillIdxFull !== null && (status === "WIN" || status === "LOSS")
       ? findCloseIndex(candles, isBuy, stop, target, fillIdxFull)
       : null;
-  const visibleStart = candles.length - visible.length - view.offset;
   const fillIdxInView =
     fillIdxFull !== null && fillIdxFull >= visibleStart && fillIdxFull < visibleStart + visible.length
       ? fillIdxFull - visibleStart
@@ -284,11 +311,12 @@ export function SignalChart({
 
   return (
     <div className="relative overflow-hidden rounded-lg border border-white/10 bg-white/[0.015]">
-      <div className="flex items-center justify-between border-b border-white/5 bg-white/[0.02] px-3 py-1.5 text-[10px] uppercase tracking-widest text-zinc-500">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 bg-white/[0.02] px-3 py-1.5 text-[10px] uppercase tracking-widest text-zinc-500">
         <span className="flex items-center gap-2">
           <span className="num text-zinc-300">{symbol}</span>
           <span className="text-zinc-600">·</span>
           <span>{visible.length} de {candles.length} velas</span>
+          <LiveClocks symbol={symbol} />
         </span>
         <span className="flex items-center gap-2">
           <span className="hidden items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[9px] tracking-widest sm:inline-flex">
@@ -298,6 +326,19 @@ export function SignalChart({
           <span className="hidden text-[9px] text-zinc-600 lg:inline">
             Arraste · roda do mouse · arraste o eixo
           </span>
+          <button
+            onClick={() => setShowMA((v) => !v)}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] uppercase tracking-widest transition",
+              showMA
+                ? "border-blue-500/40 bg-blue-500/[0.10] text-blue-300"
+                : "border-white/10 bg-white/[0.04] text-zinc-400 hover:text-zinc-200",
+            )}
+            title="Mostrar médias móveis"
+          >
+            <Activity className="h-3 w-3" />
+            MAs
+          </button>
           {isZoomedOrPanned && (
             <button
               onClick={reset}
@@ -406,6 +447,30 @@ export function SignalChart({
             solid
             thick
           />
+        )}
+
+        {/* Médias móveis (atrás das velas) */}
+        {showMA && (
+          <g pointerEvents="none">
+            {(["sma200", "ema50", "ema20", "ema9"] as const).map((key) => {
+              const meta = MA_META[key];
+              const series = ma[key];
+              const path = buildMaPath(series, visibleStart, visible.length, xOf, yOf);
+              if (!path) return null;
+              return (
+                <path
+                  key={key}
+                  d={path}
+                  stroke={meta.color}
+                  strokeWidth={meta.width}
+                  fill="none"
+                  opacity="0.92"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
+              );
+            })}
+          </g>
         )}
 
         {/* Velas */}
@@ -566,9 +631,68 @@ export function SignalChart({
             </text>
           </g>
         )}
+
+        {/* Legenda das MAs */}
+        {showMA && (
+          <g pointerEvents="none">
+            {(() => {
+              const last = visibleStart + visible.length - 1;
+              const items: { label: string; color: string; v: number | null }[] = [
+                { label: "EMA 9", color: MA_META.ema9.color, v: ma.ema9[last] ?? null },
+                { label: "EMA 20", color: MA_META.ema20.color, v: ma.ema20[last] ?? null },
+                { label: "EMA 50", color: MA_META.ema50.color, v: ma.ema50[last] ?? null },
+                { label: "SMA 200", color: MA_META.sma200.color, v: ma.sma200[last] ?? null },
+              ];
+              const x = W - padR - 130;
+              const y0 = padT + 6;
+              return items.map((it, idx) => (
+                <g key={it.label} transform={`translate(${x}, ${y0 + idx * 12})`}>
+                  <rect width="8" height="2" y={4} fill={it.color} />
+                  <text
+                    x={14}
+                    y={9}
+                    fontSize="9"
+                    fill={it.color}
+                    fontFamily="JetBrains Mono, monospace"
+                  >
+                    {it.label} {it.v !== null ? it.v.toFixed(dec) : "—"}
+                  </text>
+                </g>
+              ));
+            })()}
+          </g>
+        )}
       </svg>
     </div>
   );
+}
+
+const MA_META = {
+  ema9: { color: "#FBBF24", width: 1.2 },
+  ema20: { color: "#F97316", width: 1.4 },
+  ema50: { color: "#3B82F6", width: 1.6 },
+  sma200: { color: "#E4E4E7", width: 1.8 },
+} as const;
+
+function buildMaPath(
+  series: (number | null)[],
+  startIdx: number,
+  count: number,
+  xOf: (i: number) => number,
+  yOf: (v: number) => number,
+): string {
+  let path = "";
+  let lastWasNull = true;
+  for (let i = 0; i < count; i++) {
+    const v = series[startIdx + i];
+    if (v === null || v === undefined) {
+      lastWasNull = true;
+      continue;
+    }
+    path += `${lastWasNull ? "M" : "L"} ${xOf(i).toFixed(2)} ${yOf(v).toFixed(2)} `;
+    lastWasNull = false;
+  }
+  return path.trim();
 }
 
 function PriceLine({
@@ -671,6 +795,58 @@ function pad2(n: number): string {
 function fmtTimestamp(t: number): string {
   const d = new Date(t * 1000);
   return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function marketTzFor(symbol: string): { tz: string; label: string } {
+  const s = symbol.toUpperCase();
+  // metais e energia → Nova York (COMEX/NYMEX)
+  if (s.includes("XAU") || s.includes("GOLD") || s.includes("XAG") || s.includes("SILVER") || s.includes("WTI") || s.includes("USOIL") || s.includes("BRENT")) {
+    return { tz: "America/New_York", label: "NY" };
+  }
+  // pares JPY → Tóquio
+  if (s.endsWith("JPY") || s.endsWith("JPYXX") || s.endsWith("JPYM") || s.includes("JPY")) {
+    return { tz: "Asia/Tokyo", label: "Tóquio" };
+  }
+  // GBP → Londres
+  if (s.startsWith("GBP") || s.includes("GBP")) {
+    return { tz: "Europe/London", label: "Londres" };
+  }
+  // EUR → Frankfurt (CET)
+  if (s.startsWith("EUR") || s.includes("EUR")) {
+    return { tz: "Europe/Berlin", label: "Frankfurt" };
+  }
+  // default forex → Nova York (sessão líquida principal)
+  return { tz: "America/New_York", label: "NY" };
+}
+
+function LiveClocks({ symbol }: { symbol: string }) {
+  const [now, setNow] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const market = marketTzFor(symbol);
+  const fmt = (tz: string) =>
+    new Intl.DateTimeFormat("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+      timeZone: tz,
+    }).format(now);
+  return (
+    <span className="hidden items-center gap-2 sm:inline-flex">
+      <span className="text-zinc-600">·</span>
+      <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[9px] tracking-widest">
+        <span className="text-zinc-500">BR</span>
+        <span className="num text-zinc-200">{fmt("America/Sao_Paulo")}</span>
+      </span>
+      <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[9px] tracking-widest">
+        <span className="text-zinc-500">{market.label}</span>
+        <span className="num text-zinc-200">{fmt(market.tz)}</span>
+      </span>
+    </span>
+  );
 }
 
 function niceTicks(min: number, max: number, count: number): number[] {

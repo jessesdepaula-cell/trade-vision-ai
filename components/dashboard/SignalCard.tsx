@@ -39,6 +39,10 @@ export type SignalData = {
 
 export function SignalCard({ signal: s, defaultExpanded }: { signal: SignalData; defaultExpanded?: boolean }) {
   if (!s.hasSetup) return <NoSetupRow signal={s} />;
+  return <ActiveCard signal={s} defaultExpanded={defaultExpanded} />;
+}
+
+function ActiveCard({ signal: s, defaultExpanded }: { signal: SignalData; defaultExpanded?: boolean }) {
 
   const isBuy = s.direction?.startsWith("COMPRA");
   const meta = directionMeta(s.direction);
@@ -288,24 +292,69 @@ function PriceBox({
 }
 
 function NoSetupRow({ signal: s }: { signal: SignalData }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasChart = !!s.candleData && s.candleData.length > 0;
   return (
-    <div className="flex items-center justify-between rounded-md border border-white/5 bg-white/[0.015] px-4 py-2 text-xs">
-      <div className="flex items-center gap-2">
-        <span className="num text-sm text-zinc-300">{s.symbol}</span>
-        <span className="num text-[10px] text-zinc-500">· {s.timeframe}</span>
-        <span
-          className={cn(
-            "rounded-md border px-1.5 py-0.5 text-[9px] uppercase tracking-widest",
-            s.mode === "SMC"
-              ? "border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-400/80"
-              : "border-amber-500/20 bg-amber-500/[0.04] text-amber-400/80",
+    <div className="overflow-hidden rounded-md border border-white/5 bg-white/[0.015]">
+      <button
+        type="button"
+        onClick={() => hasChart && setExpanded((v) => !v)}
+        disabled={!hasChart}
+        className={cn(
+          "flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-xs",
+          hasChart ? "hover:bg-white/[0.02]" : "cursor-default",
+        )}
+      >
+        <div className="flex items-center gap-2">
+          {hasChart ? (
+            expanded ? (
+              <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 text-zinc-500" />
+            )
+          ) : (
+            <span className="h-3.5 w-3.5" />
           )}
-        >
-          {s.mode}
-        </span>
-        <span className="text-zinc-500">sem setup</span>
-      </div>
-      <span className="num text-[10px] text-zinc-500">{timeAgo(s.scannedAt)}</span>
+          <span className="num text-sm text-zinc-300">{s.symbol}</span>
+          <span className="num text-[10px] text-zinc-500">· {s.timeframe}</span>
+          <span
+            className={cn(
+              "rounded-md border px-1.5 py-0.5 text-[9px] uppercase tracking-widest",
+              s.mode === "SMC"
+                ? "border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-400/80"
+                : "border-amber-500/20 bg-amber-500/[0.04] text-amber-400/80",
+            )}
+          >
+            {s.mode}
+          </span>
+          <span className="text-zinc-500">sem setup</span>
+        </div>
+        <span className="num text-[10px] text-zinc-500">{timeAgo(s.scannedAt)}</span>
+      </button>
+
+      {expanded && hasChart && (
+        <div className="border-t border-white/5 p-4">
+          <SignalChart
+            candles={s.candleData!}
+            symbol={s.symbol}
+            isBuy={false}
+            entry={null}
+            stop={null}
+            target={null}
+            targets={[null, null, null]}
+            recommendedTarget={null}
+            status={s.status}
+            exitPrice={null}
+            rMultiple={null}
+            scannedAt={s.scannedAt}
+          />
+          {s.justification && (
+            <p className="mt-3 text-xs leading-relaxed text-zinc-400">
+              {s.justification}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
