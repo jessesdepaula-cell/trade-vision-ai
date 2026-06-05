@@ -68,7 +68,14 @@ export async function POST(req: Request) {
       structure: result.structure ?? null,
       justification: result.justification ?? null,
       tipoSetup: result.tipo_setup ?? null,
-      checklistSmc: result.checklist_smc ? (result.checklist_smc as object) : undefined,
+      checklistSmc:
+        mode === "SMC" && result.checklist_smc
+          ? (result.checklist_smc as object)
+          : undefined,
+      checklistClassico:
+        mode === "CLASSICO" && result.checklist_classico
+          ? (result.checklist_classico as object)
+          : undefined,
       status: result.hasSetup ? "PENDING" : "NO_SETUP",
       candleData: candles.slice(-80) as object,
     },

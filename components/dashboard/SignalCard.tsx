@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Clock, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { SmcChecklist } from "./SmcChecklist";
+import { ClassicoChecklist } from "./ClassicoChecklist";
 import { SignalChart, type ChartCandle } from "./SignalChart";
 
 export type SignalData = {
@@ -33,6 +34,7 @@ export type SignalData = {
   candleData: ChartCandle[] | null;
   tipoSetup: string | null;
   checklistSmc: Record<string, boolean> | null;
+  checklistClassico: Record<string, boolean> | null;
 };
 
 export function SignalCard({ signal: s, defaultExpanded }: { signal: SignalData; defaultExpanded?: boolean }) {
@@ -203,9 +205,12 @@ export function SignalCard({ signal: s, defaultExpanded }: { signal: SignalData;
             </p>
           )}
 
-          {/* Checklist SMC */}
+          {/* Checklist por modo */}
           {s.mode === "SMC" && s.checklistSmc && (
             <SmcChecklist data={s.checklistSmc} tipoSetup={s.tipoSetup} />
+          )}
+          {s.mode === "CLASSICO" && s.checklistClassico && (
+            <ClassicoChecklist data={s.checklistClassico} tipoSetup={s.tipoSetup} />
           )}
 
           {/* Resultado se fechado */}

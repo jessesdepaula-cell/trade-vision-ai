@@ -22,6 +22,7 @@ import { AnnotatedChart, buildAnnotationData } from "./AnnotatedChart";
 import { TradeFormButton } from "./TradeForm";
 import { Mt5SendButton } from "./Mt5SendButton";
 import { SmcChecklist } from "./SmcChecklist";
+import { ClassicoChecklist } from "./ClassicoChecklist";
 
 type Mode = "CLASSICO" | "SMC";
 
@@ -57,6 +58,7 @@ type Analysis = {
     justificativa?: string;
     tipo_setup?: string;
     checklist_smc?: Record<string, boolean>;
+    checklist_classico?: Record<string, boolean>;
   };
   escala_visivel?: { preco_topo?: string; preco_base?: string };
 };
@@ -452,9 +454,12 @@ function ResultPanel({
         </p>
       </div>
 
-      {/* Checklist SMC */}
+      {/* Checklist por modo */}
       {result.modo_aplicado === "SMC" && a.checklist_smc && (
         <SmcChecklist data={a.checklist_smc} tipoSetup={a.tipo_setup} />
+      )}
+      {result.modo_aplicado === "CLASSICO" && a.checklist_classico && (
+        <ClassicoChecklist data={a.checklist_classico} tipoSetup={a.tipo_setup} />
       )}
 
       {/* Entrada */}

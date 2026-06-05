@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { smcSystemPrompt } from "./smcManual";
+import { classicoSystemPrompt } from "./classicoManual";
 
 export type Candle = { t: number; o: number; h: number; l: number; c: number; v?: number };
 
@@ -12,13 +13,23 @@ export type SmcChecklist = {
   OB_em_zona_correta?: boolean;
 };
 
+export type ClassicoChecklist = {
+  tendencia_SMA200_alinhada?: boolean;
+  alinhamento_perfeito_medias?: boolean;
+  preco_na_zona_de_valor?: boolean;
+  confluencia_suporte_resistencia?: boolean;
+  volume_pullback_decrescente?: boolean;
+  candle_gatilho_valido?: boolean;
+};
+
 export type ScanResult = {
   hasSetup: boolean;
-  tipo_setup?: "Spring" | "Upthrust" | "Nenhum";
+  tipo_setup?: string;
   direction?: "COMPRA_FORTE" | "COMPRA_FRACA" | "VENDA_FORTE" | "VENDA_FRACA" | "NEUTRO";
   probability?: number;
   confidence?: "ALTA" | "MEDIA" | "BAIXA";
   checklist_smc?: SmcChecklist;
+  checklist_classico?: ClassicoChecklist;
   structure?: string;
   entryPrice?: number;
   entryZoneLow?: number;
@@ -42,9 +53,14 @@ function candlesToText(candles: Candle[]): string {
 }
 
 const SMC_PROMPT = smcSystemPrompt({ withImage: false, jsonShape: "scan" });
+const CLASSICO_PROMPT = classicoSystemPrompt({ jsonShape: "scan" });
 
 function systemPrompt(mode: "SMC" | "CLASSICO") {
   if (mode === "SMC") return SMC_PROMPT;
+  return CLASSICO_PROMPT;
+}
+
+function _unused_legacy() {
   return `Você é um Analista Financeiro Institucional de Elite. Analise os dados de OHLC fornecidos e identifique se há um SETUP DE TRADE OPERACIONAL AGORA. Retorne APENAS JSON, sem markdown.
 
 MODO: CLÁSSICO — foque em Tendência, Suportes/Resistências, Padrões de candles/gráficos.
@@ -87,12 +103,12 @@ FORMATO JSON OBRIGATÓRIO:
 }`;
 }
 
-// modelo default: usa gpt-4o para SMC (manual exige rigor), gpt-4o-mini para clássico (mais barato)
+// Ambos os modos agora têm manuais rigorosos — usar gpt-4o por padrão
 function pickModel(mode: "SMC" | "CLASSICO"): string {
   if (mode === "SMC") {
     return process.env.OPENAI_SCAN_MODEL_SMC ?? process.env.OPENAI_SCAN_MODEL ?? "gpt-4o";
   }
-  return process.env.OPENAI_SCAN_MODEL ?? "gpt-4o-mini";
+  return process.env.OPENAI_SCAN_MODEL_CLASSICO ?? process.env.OPENAI_SCAN_MODEL ?? "gpt-4o";
 }
 
 export async function scanWithAI(input: {

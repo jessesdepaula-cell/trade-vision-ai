@@ -183,6 +183,7 @@ export default async function SinaisPage({
                   candleData: (s.candleData as SignalData["candleData"]) ?? null,
                   tipoSetup: s.tipoSetup,
                   checklistSmc: (s.checklistSmc as Record<string, boolean> | null) ?? null,
+                  checklistClassico: (s.checklistClassico as Record<string, boolean> | null) ?? null,
                 } satisfies SignalData
               }
             />

@@ -170,9 +170,10 @@ model Signal {
   structure         String?    @db.Text
   justification     String?    @db.Text
 
-  // SMC manual outputs
-  tipoSetup         String?    // "Spring" | "Upthrust" | "Nenhum"
+  // Manual outputs (SMC ou Clássico)
+  tipoSetup         String?    // "Spring"|"Upthrust"|"Pullback Long"|"Pullback Short"|"Nenhum"
   checklistSmc      Json?      // { vies_HTF_a_favor, liquidez_identificada, ... }
+  checklistClassico Json?      // { tendencia_SMA200_alinhada, alinhamento_perfeito_medias, ... }
 
   // Tracking
   status            String     @default("PENDING") // PENDING | FILLED | WIN | LOSS | EXPIRED | NO_SETUP

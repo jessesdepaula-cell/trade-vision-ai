@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { requireActiveSubscription } from "@/lib/subscription";
 import { prisma } from "@/lib/prisma";
 import { smcSystemPrompt } from "@/lib/smcManual";
+import { classicoSystemPrompt } from "@/lib/classicoManual";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -10,10 +11,13 @@ export const maxDuration = 60;
 type Mode = "CLASSICO" | "SMC";
 
 const SMC_SYSTEM_PROMPT = smcSystemPrompt({ withImage: true, jsonShape: "analyze" });
+const CLASSICO_RIGOROSO_PROMPT = classicoSystemPrompt({ jsonShape: "analyze" });
 
-const SYSTEM_PROMPT = (mode: Mode) => mode === "SMC" ? SMC_SYSTEM_PROMPT : CLASSICO_SYSTEM_PROMPT;
+const SYSTEM_PROMPT = (mode: Mode) =>
+  mode === "SMC" ? SMC_SYSTEM_PROMPT : CLASSICO_RIGOROSO_PROMPT;
 
-const CLASSICO_SYSTEM_PROMPT = `Você é um Analista Financeiro Institucional de Elite e especialista em Visão Computacional. Sua tarefa é analisar a imagem de um gráfico financeiro fornecida e retornar APENAS um objeto JSON válido, sem markdown, sem texto explicativo fora do JSON.
+// Mantido apenas como referência histórica — não é mais usado.
+const _CLASSICO_LEGACY = `Você é um Analista Financeiro Institucional de Elite e especialista em Visão Computacional. Sua tarefa é analisar a imagem de um gráfico financeiro fornecida e retornar APENAS um objeto JSON válido, sem markdown, sem texto explicativo fora do JSON.
 Modo de análise: CLÁSSICO (Tendência + Suportes/Resistências + Padrões de candles).
 
 PASSO 1: PORTÃO DE QUALIDADE (QUALITY GATE)
@@ -81,6 +85,7 @@ FORMATO JSON OBRIGATÓRIO:
 }
 
 IMPORTANTE: O bloco "escala_visivel" é OBRIGATÓRIO quando status=VALIDO. Leia os preços extremos da régua de preços da imagem — esses valores serão usados para desenhar linhas no gráfico do usuário, então precisam ser precisos.`;
+void _CLASSICO_LEGACY; // evita warning unused
 
 function cleanJson(raw: string): string {
   let s = raw.trim();
