@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { Clock, Target, TrendingDown, TrendingUp } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { SmcChecklist } from "./SmcChecklist";
 import { SignalChart, type ChartCandle } from "./SignalChart";
 
@@ -34,13 +35,18 @@ export type SignalData = {
   checklistSmc: Record<string, boolean> | null;
 };
 
-export function SignalCard({ signal: s }: { signal: SignalData }) {
+export function SignalCard({ signal: s, defaultExpanded }: { signal: SignalData; defaultExpanded?: boolean }) {
   if (!s.hasSetup) return <NoSetupRow signal={s} />;
 
   const isBuy = s.direction?.startsWith("COMPRA");
   const meta = directionMeta(s.direction);
   const statusMeta = statusBadge(s.status);
   const target = pickTarget(s);
+
+  // Default: expandido para sinais ativos (PENDING/FILLED), colapsado para fechados
+  const initialExpanded =
+    defaultExpanded ?? (s.status === "PENDING" || s.status === "FILLED");
+  const [expanded, setExpanded] = useState(initialExpanded);
 
   return (
     <div
@@ -52,9 +58,18 @@ export function SignalCard({ signal: s }: { signal: SignalData }) {
         s.status === "PENDING" && "border-white/10 bg-white/[0.02]",
       )}
     >
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 px-4 py-3">
+      {/* Header (clicável para expandir/colapsar) */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full flex-wrap items-center justify-between gap-2 border-b border-white/5 px-4 py-3 text-left hover:bg-white/[0.02]"
+      >
         <div className="flex items-center gap-2">
+          {expanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-zinc-500" />
+          )}
           <span className="num text-sm font-medium text-offwhite">{s.symbol}</span>
           <span className="num text-[10px] text-zinc-500">· {s.timeframe}</span>
           <span
@@ -67,8 +82,29 @@ export function SignalCard({ signal: s }: { signal: SignalData }) {
           >
             {s.mode === "SMC" ? "SMC" : "Clássico"}
           </span>
+          {!expanded && (
+            <>
+              <span className={cn("ml-2 text-xs font-medium", meta.text)}>
+                {meta.label}
+              </span>
+              {s.probability !== null && (
+                <span className={cn("num text-xs", meta.text)}>· {s.probability}%</span>
+              )}
+            </>
+          )}
         </div>
         <div className="flex items-center gap-2">
+          {!expanded && (s.status === "WIN" || s.status === "LOSS") && s.rMultiple !== null && (
+            <span
+              className={cn(
+                "num text-xs font-medium",
+                s.rMultiple > 0 ? "text-emerald-400" : "text-rose-400",
+              )}
+            >
+              {s.rMultiple > 0 ? "+" : ""}
+              {s.rMultiple.toFixed(2)}R
+            </span>
+          )}
           <span className={cn("rounded-md border px-2 py-0.5 text-[9px] uppercase tracking-widest", statusMeta.cls)}>
             {statusMeta.label}
           </span>
@@ -77,10 +113,12 @@ export function SignalCard({ signal: s }: { signal: SignalData }) {
             {timeAgo(s.scannedAt)}
           </span>
         </div>
-      </div>
+      </button>
+
+      {!expanded && null}
 
       {/* Gráfico de candles ao topo */}
-      {s.candleData && s.candleData.length > 0 && (
+      {expanded && s.candleData && s.candleData.length > 0 && (
         <div className="border-b border-white/5 p-4">
           <SignalChart
             candles={s.candleData}
@@ -99,7 +137,7 @@ export function SignalCard({ signal: s }: { signal: SignalData }) {
         </div>
       )}
 
-      <div className="p-4">
+      {expanded && <div className="p-4">
         <div className="space-y-3">
           {/* Sinal e probabilidade */}
           <div className="flex items-center justify-between gap-3">

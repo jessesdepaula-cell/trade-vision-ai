@@ -68,7 +68,7 @@ export default async function SinaisPage({
     <div className="mx-auto max-w-6xl px-6 py-10">
       <AutoRefresh intervalMs={10000} />
 
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <Radar className="h-5 w-5 text-emerald-500" />
@@ -83,16 +83,33 @@ export default async function SinaisPage({
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <FilterChip param="modo" value="" label="Todos modos" active={!modoFilter} />
-          <FilterChip param="modo" value="smc" label="SMC" active={modoFilter === "smc"} />
-          <FilterChip param="modo" value="classico" label="Clássico" active={modoFilter === "classico"} />
-          <span className="mx-1 self-center text-zinc-700">|</span>
-          <FilterChip param="status" value="" label="Todos status" active={!statusFilter} />
+        <div className="flex flex-wrap gap-1.5">
+          <FilterChip param="status" value="" label="Todos" active={!statusFilter} />
           <FilterChip param="status" value="pendentes" label="Pendentes" active={statusFilter === "pendentes"} />
-          <FilterChip param="status" value="abertos" label="Abertos" active={statusFilter === "abertos"} />
+          <FilterChip param="status" value="abertos" label="Em execução" active={statusFilter === "abertos"} />
           <FilterChip param="status" value="fechados" label="Fechados" active={statusFilter === "fechados"} />
         </div>
+      </div>
+
+      {/* Tabs por modo */}
+      <div className="mb-6 border-b border-white/10">
+        <nav className="flex gap-1">
+          <ModeTab href={buildModeHref(undefined, statusFilter)} active={!modoFilter} count={signals.length} label="Todos" />
+          <ModeTab
+            href={buildModeHref("smc", statusFilter)}
+            active={modoFilter === "smc"}
+            count={signals.filter((s) => s.mode === "SMC").length}
+            label="SMC"
+            tone="emerald"
+          />
+          <ModeTab
+            href={buildModeHref("classico", statusFilter)}
+            active={modoFilter === "classico"}
+            count={signals.filter((s) => s.mode === "CLASSICO").length}
+            label="Clássico"
+            tone="amber"
+          />
+        </nav>
       </div>
 
       {/* Medidor de assertividade por modo */}
@@ -173,6 +190,61 @@ export default async function SinaisPage({
         </div>
       )}
     </div>
+  );
+}
+
+function buildModeHref(modo: string | undefined, status: string | undefined): string {
+  const params = new URLSearchParams();
+  if (modo) params.set("modo", modo);
+  if (status) params.set("status", status);
+  const qs = params.toString();
+  return `/dashboard/sinais${qs ? `?${qs}` : ""}`;
+}
+
+function ModeTab({
+  href,
+  active,
+  label,
+  count,
+  tone = "default",
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+  count: number;
+  tone?: "default" | "emerald" | "amber";
+}) {
+  return (
+    <a
+      href={href}
+      className={cn(
+        "relative inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition",
+        active ? "text-offwhite" : "text-zinc-500 hover:text-zinc-300",
+      )}
+    >
+      {label}
+      <span
+        className={cn(
+          "num rounded-md border px-1.5 py-0.5 text-[10px] font-normal",
+          active && tone === "emerald" && "border-emerald-500/40 bg-emerald-500/[0.10] text-emerald-300",
+          active && tone === "amber" && "border-amber-500/40 bg-amber-500/[0.10] text-amber-300",
+          active && tone === "default" && "border-white/15 bg-white/[0.05] text-zinc-200",
+          !active && "border-white/10 bg-white/[0.02] text-zinc-500",
+        )}
+      >
+        {count}
+      </span>
+      {active && (
+        <span
+          className={cn(
+            "absolute bottom-[-1px] left-0 right-0 h-[2px]",
+            tone === "emerald" && "bg-emerald-400",
+            tone === "amber" && "bg-amber-400",
+            tone === "default" && "bg-offwhite",
+          )}
+        />
+      )}
+    </a>
   );
 }
 
