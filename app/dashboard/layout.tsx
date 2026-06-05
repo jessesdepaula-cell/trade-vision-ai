@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { SignOutButton, UserButton, currentUser } from "@clerk/nextjs";
+import { SignOutButton, UserButton } from "@clerk/nextjs";
+import { currentUser } from "@clerk/nextjs/server";
 import { Crosshair, LogOut } from "lucide-react";
 import { requireActiveSubscription } from "@/lib/subscription";
 import { redirect } from "next/navigation";
