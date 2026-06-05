@@ -23,6 +23,9 @@ export async function POST(req: Request) {
   const mode = String(body.mode ?? "SMC") as "SMC" | "CLASSICO";
   const watchlistId = body.watchlistId ? String(body.watchlistId) : null;
   const candles = Array.isArray(body.candles) ? (body.candles as Candle[]) : [];
+  const htfCandles = Array.isArray(body.htfCandles)
+    ? (body.htfCandles as Candle[])
+    : [];
 
   if (!symbol || candles.length < 20) {
     return NextResponse.json({ error: "dados insuficientes" }, { status: 400 });
@@ -38,10 +41,10 @@ export async function POST(req: Request) {
     // não interrompe o scan se o tracker falhar
   }
 
-  // chama IA
+  // chama IA com contexto HTF
   let result;
   try {
-    result = await scanWithAI({ symbol, timeframe, mode, candles });
+    result = await scanWithAI({ symbol, timeframe, mode, candles, htfCandles });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "erro IA";
     return NextResponse.json({ error: msg }, { status: 500 });
