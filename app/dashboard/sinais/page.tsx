@@ -3,6 +3,7 @@ import { getOrCreateUser } from "@/lib/subscription";
 import { prisma } from "@/lib/prisma";
 import { SignalCard, type SignalData } from "@/components/dashboard/SignalCard";
 import { ModeAccuracyMeter } from "@/components/dashboard/ModeAccuracyMeter";
+import { SignalNotifications } from "@/components/dashboard/SignalNotifications";
 import { getModeStats } from "@/lib/modeStats";
 import { AutoRefresh } from "./AutoRefresh";
 import { cn } from "@/lib/utils";
@@ -131,6 +132,23 @@ export default async function SinaisPage({
           />
         </nav>
       </div>
+
+      {/* Notificações de sinais fortes */}
+      <section className="mb-4">
+        <SignalNotifications
+          signals={allRecent.map((s) => ({
+            id: s.id,
+            symbol: s.symbol,
+            mode: s.mode,
+            direction: s.direction,
+            probability: s.probability,
+            confidence: s.confidence,
+            hasSetup: s.hasSetup,
+            status: s.status,
+            scannedAt: s.scannedAt.toISOString(),
+          }))}
+        />
+      </section>
 
       {/* Medidor de assertividade por modo (segue a aba ativa) */}
       <section className="mb-6">
