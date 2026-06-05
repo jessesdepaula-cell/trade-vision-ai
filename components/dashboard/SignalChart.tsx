@@ -110,8 +110,14 @@ export function SignalChart({
   // candles ajustadas ao timeframe selecionado (apenas agregação para cima é possível)
   const candles = useMemo(() => aggregateCandles(rawCandles, baseTf, tf), [rawCandles, baseTf, tf]);
 
-  // Mostra mais histórico por padrão (até 120 velas, ou tudo se < 120).
-  const initialVisible = Math.min(candles.length, 120);
+  // Visíveis = 70% do total disponível (mín 30, máx 120) para SEMPRE deixar
+  // 30% de margem permitindo arrastar para trás e revelar o início do gráfico.
+  function computeInitialVisible(total: number): number {
+    if (total <= 30) return total;
+    const seventy = Math.floor(total * 0.7);
+    return Math.max(30, Math.min(120, seventy));
+  }
+  const initialVisible = computeInitialVisible(candles.length);
   const [view, setView] = useState<ViewState>({
     visibleCount: initialVisible,
     offset: 0,
@@ -121,7 +127,8 @@ export function SignalChart({
 
   // ao trocar TF, reseta visualização
   useEffect(() => {
-    setView({ visibleCount: Math.min(candles.length, 120), offset: 0, yZoom: 1, yPan: 0 });
+    setView({ visibleCount: computeInitialVisible(candles.length), offset: 0, yZoom: 1, yPan: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tf, candles.length]);
 
   const [showMA, setShowMA] = useState(defaultShowMA);
@@ -328,10 +335,14 @@ export function SignalChart({
   }, [candles.length]);
 
   const isZoomedOrPanned =
-    view.visibleCount !== Math.min(candles.length, 120) ||
+    view.visibleCount !== computeInitialVisible(candles.length) ||
     view.offset !== 0 ||
     Math.abs(view.yZoom - 1) > 0.01 ||
     Math.abs(view.yPan) > 0.01;
+
+  // Quanto ainda dá pra arrastar para trás (em velas).
+  const maxOffsetAvailable = Math.max(0, candles.length - view.visibleCount);
+  const noMoreHistory = maxOffsetAvailable === 0;
 
   if (candles.length === 0) {
     return (
@@ -401,29 +412,32 @@ export function SignalChart({
           <LiveClocks symbol={symbol} />
         </span>
         <span className="flex items-center gap-2">
-          {/* Seletor de timeframe */}
-          <span className="hidden items-center gap-0.5 rounded-md border border-white/10 bg-white/[0.03] p-0.5 sm:inline-flex">
-            {TF_OPTIONS.map((opt) => {
-              const disabled = TF_MIN[opt] < TF_MIN[baseTf];
-              return (
-                <button
-                  key={opt}
-                  onClick={() => !disabled && setTf(opt)}
-                  disabled={disabled}
-                  title={disabled ? `Sem dados para ${opt} (base é ${baseTf})` : `Mudar para ${opt}`}
-                  className={cn(
-                    "px-1.5 py-0.5 text-[9px] uppercase tracking-widest rounded",
-                    tf === opt
-                      ? "bg-emerald-500/20 text-emerald-300"
-                      : disabled
-                        ? "text-zinc-700 cursor-not-allowed"
-                        : "text-zinc-400 hover:text-zinc-200",
-                  )}
-                >
-                  {opt}
-                </button>
-              );
-            })}
+          {/* Seletor de timeframe — destacado */}
+          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/[0.04] px-1.5 py-0.5">
+            <span className="text-[9px] font-semibold uppercase tracking-widest text-emerald-400">TF</span>
+            <span className="flex items-center gap-0.5">
+              {TF_OPTIONS.map((opt) => {
+                const disabled = TF_MIN[opt] < TF_MIN[baseTf];
+                return (
+                  <button
+                    key={opt}
+                    onClick={() => !disabled && setTf(opt)}
+                    disabled={disabled}
+                    title={disabled ? `Sem dados para ${opt} (base é ${baseTf})` : `Mudar para ${opt}`}
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider transition",
+                      tf === opt
+                        ? "bg-emerald-500/30 text-emerald-200 ring-1 ring-emerald-400/50"
+                        : disabled
+                          ? "text-zinc-700 cursor-not-allowed"
+                          : "text-zinc-300 hover:bg-white/[0.05] hover:text-emerald-200",
+                    )}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+            </span>
           </span>
           <span className="hidden items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[9px] tracking-widest sm:inline-flex">
             <span className="h-1 w-1 rounded-full bg-emerald-400" />
@@ -467,6 +481,13 @@ export function SignalChart({
           )}
         </span>
       </div>
+
+      {/* Aviso quando não há mais histórico para arrastar */}
+      {noMoreHistory && candles.length > 0 && (
+        <div className="border-b border-white/5 bg-amber-500/[0.04] px-3 py-1 text-[9px] uppercase tracking-widest text-amber-300/80">
+          fim do histórico ({candles.length} velas) — para arrastar mais para trás, aguarde o EA acumular mais barras ou reduza o zoom (roda do mouse)
+        </div>
+      )}
 
       <svg
         ref={svgRef}
