@@ -38,7 +38,7 @@ export type BacktestSignal = {
   exitPrice: number | null;
 };
 
-export type EquityPoint = { date: string; cum: number };
+export type EquityPoint = { date: string; cum: number; r: number };
 
 function periodStart(p: BacktestPeriod): Date | null {
   const now = Date.now();
@@ -152,10 +152,12 @@ export async function runBacktest(input: {
     );
   let cum = 0;
   const equityCurve: EquityPoint[] = closedOrdered.map((s) => {
-    cum += s.rMultiple as number;
+    const r = s.rMultiple as number;
+    cum += r;
     return {
       date: (s.closedAt as Date).toISOString(),
       cum: Number(cum.toFixed(2)),
+      r,
     };
   });
 
