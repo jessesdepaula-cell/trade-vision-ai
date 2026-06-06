@@ -13,7 +13,7 @@
 
 //--- Input Parameters
 input group "=== CONEXÃO API ==="
-input string  ApiBaseUrl       = "https://tradevision-app.vercel.app";
+input string  ApiBaseUrl       = "https://jessedepaula.com.br";
 input string  ApiToken         = "";
 input int     RequestTimeout   = 5000;
 input int     MaxRetries       = 3;

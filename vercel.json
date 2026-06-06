@@ -1,4 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "alias": ["tradevision-app.vercel.app", "jessedepaula.com.br"]
+  "alias": ["jessedepaula.com.br"]
 }
