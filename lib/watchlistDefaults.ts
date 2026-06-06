@@ -11,4 +11,6 @@ export const DEFAULT_WATCHLIST: Array<{
   { symbol: "GBPUSD", timeframe: "M15", mode: "CLASSICO" },
   { symbol: "XAUUSD", timeframe: "M15", mode: "SMC" },
   { symbol: "XAUUSD", timeframe: "M15", mode: "CLASSICO" },
+  { symbol: "BTCUSD", timeframe: "M15", mode: "SMC" },
+  { symbol: "BTCUSD", timeframe: "M15", mode: "CLASSICO" },
 ];
