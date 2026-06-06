@@ -77,7 +77,7 @@ export default async function Mt5Page() {
             <div>
               <p className="text-sm text-offwhite">TradeVisionBridge.mq5</p>
               <p className="num text-[11px] text-zinc-500">
-                Expert Advisor MQL5 · v2.0 · Scanner + Bridge + Heartbeat
+                Expert Advisor MQL5 · v3.0 · Scanner + Bridge + Heartbeat
               </p>
             </div>
           </div>
