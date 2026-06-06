@@ -366,7 +366,9 @@ function NoSetupRow({ signal: s }: { signal: SignalData }) {
           >
             {s.mode}
           </span>
-          <span className="text-zinc-500">sem setup</span>
+          <span className="text-zinc-500">
+            {s.id.startsWith("mock-") ? "aguardando escaneamento" : "sem setup"}
+          </span>
         </div>
         <span className="num text-[10px] text-zinc-500">{timeAgo(s.scannedAt)}</span>
       </button>

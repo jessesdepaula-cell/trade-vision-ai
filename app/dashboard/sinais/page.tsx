@@ -59,10 +59,67 @@ export default async function SinaisPage({
   const seen = new Set<string>();
   const deduped: typeof allRecent = [];
   for (const s of allRecent) {
-    const key = `${s.symbol}|${s.timeframe}|${s.mode}`;
+    // Limpa sufixos para comparar de forma justa (ex: EURUSDXX -> EURUSD)
+    const baseSymbol = s.symbol.replace(/XX|xx|m|\.r|pro|_i|\.a|cent|x|\.dk|\+/g, "");
+    const key = `${baseSymbol}|${s.timeframe}|${s.mode}`;
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(s);
+  }
+
+  // Adiciona itens da watchlist que não possuem sinal recente no banco
+  if (statusFilter !== "fechados") {
+    const watchlist = await prisma.watchlist.findMany({
+      where: { accountId: { in: accountIds }, active: true },
+    });
+    let filteredWatchlist = watchlist;
+    if (modoFilter === "smc") {
+      filteredWatchlist = watchlist.filter((w) => w.mode === "SMC");
+    } else if (modoFilter === "classico") {
+      filteredWatchlist = watchlist.filter((w) => w.mode === "CLASSICO");
+    }
+
+    for (const w of filteredWatchlist) {
+      const hasSignal = deduped.some((s) => {
+        const sBase = s.symbol.replace(/XX|xx|m|\.r|pro|_i|\.a|cent|x|\.dk|\+/g, "").toUpperCase();
+        const wBase = w.symbol.toUpperCase();
+        return s.mode === w.mode && s.timeframe === w.timeframe && sBase === wBase;
+      });
+
+      if (!hasSignal) {
+        deduped.push({
+          id: `mock-${w.id}`,
+          accountId: w.accountId,
+          symbol: w.symbol,
+          timeframe: w.timeframe,
+          mode: w.mode,
+          hasSetup: false,
+          direction: null,
+          probability: null,
+          confidence: null,
+          entryPrice: null,
+          stopPrice: null,
+          target1: null,
+          target2: null,
+          target3: null,
+          recommendedTarget: null,
+          riskReward: null,
+          structure: null,
+          justification: "Aguardando primeiro escaneamento do robô MetaTrader 5...",
+          status: "NO_SETUP",
+          exitPrice: null,
+          rMultiple: null,
+          scannedAt: w.lastScanAt ?? new Date(),
+          candleData: null,
+          tipoSetup: null,
+          checklistSmc: null,
+          checklistClassico: null,
+          tradeCreated: false,
+          filledAt: null,
+          closedAt: null,
+        } as any);
+      }
+    }
   }
 
   // No filtro "Fechados" o usuário quer histórico completo de trades — NÃO dedupa.
