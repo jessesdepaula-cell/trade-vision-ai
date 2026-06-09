@@ -8,7 +8,7 @@ export async function deleteAccountAction() {
   const { userId } = await auth();
   if (!userId) throw new Error("Não autenticado");
 
-  // Apaga User → cascades em analyses, trades, mt5Accounts (com Signal/Watchlist/Tick/Order).
+  // Apaga User → cascades em analyses, trades, watchlist, signals, ticks.
   await prisma.user
     .deleteMany({ where: { clerkId: userId } })
     .catch(() => null);

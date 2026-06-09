@@ -1,4 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "alias": ["jessedepaula.com.br"]
+  "alias": ["jessedepaula.com.br"],
+  "crons": [
+    {
+      "path": "/api/cron/scan-all",
+      "schedule": "*/15 * * * *"
+    }
+  ]
 }

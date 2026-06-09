@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
-import { Activity, CreditCard, Database, Mail, Shield, User, Zap } from "lucide-react";
+import { Activity, CreditCard, Database, Eye, Mail, Shield, User } from "lucide-react";
 import { getOrCreateUser } from "@/lib/subscription";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
@@ -16,17 +16,11 @@ export default async function ConfiguracoesPage() {
   if (!user) return null;
   const clerkUser = await currentUser();
 
-  const [tradeCount, signalCount, analysisCount, accountCount] = await Promise.all([
+  const [tradeCount, signalCount, analysisCount, watchlistCount] = await Promise.all([
     prisma.trade.count({ where: { userId: user.id } }),
-    prisma.mT5Account
-      .findMany({ where: { userId: user.id }, select: { id: true } })
-      .then((accs) =>
-        accs.length
-          ? prisma.signal.count({ where: { accountId: { in: accs.map((a) => a.id) } } })
-          : 0,
-      ),
+    prisma.signal.count({ where: { userId: user.id } }),
     prisma.analysis.count({ where: { userId: user.id } }),
-    prisma.mT5Account.count({ where: { userId: user.id } }),
+    prisma.watchlist.count({ where: { userId: user.id } }),
   ]);
 
   const fullName =
@@ -50,15 +44,10 @@ export default async function ConfiguracoesPage() {
       </div>
 
       <div className="space-y-6">
-        {/* Perfil */}
         <Section icon={<User className="h-3.5 w-3.5" />} title="Perfil">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Nome" value={fullName} />
-            <Field
-              label="Email"
-              value={email}
-              icon={<Mail className="h-3 w-3" />}
-            />
+            <Field label="Email" value={email} icon={<Mail className="h-3 w-3" />} />
             <Field
               label="Cliente desde"
               value={createdAt ? createdAt.toLocaleDateString("pt-BR") : "—"}
@@ -67,7 +56,6 @@ export default async function ConfiguracoesPage() {
           </div>
         </Section>
 
-        {/* Assinatura */}
         <Section
           icon={<CreditCard className="h-3.5 w-3.5" />}
           title="Assinatura"
@@ -110,16 +98,12 @@ export default async function ConfiguracoesPage() {
           )}
         </Section>
 
-        {/* Dados */}
-        <Section
-          icon={<Database className="h-3.5 w-3.5" />}
-          title="Seus dados"
-        >
+        <Section icon={<Database className="h-3.5 w-3.5" />} title="Seus dados">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <DataCount label="Análises" value={analysisCount} />
             <DataCount label="Trades" value={tradeCount} />
             <DataCount label="Sinais" value={signalCount} />
-            <DataCount label="Contas MT5" value={accountCount} />
+            <DataCount label="Watchlist" value={watchlistCount} />
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             <ExportButton href="/api/export/trades" label="Exportar diário de trades" />
@@ -130,20 +114,19 @@ export default async function ConfiguracoesPage() {
           </p>
         </Section>
 
-        {/* Integrações */}
-        <Section icon={<Zap className="h-3.5 w-3.5" />} title="Integrações">
+        <Section icon={<Eye className="h-3.5 w-3.5" />} title="Fonte de dados">
+          <p className="text-xs text-zinc-400">
+            Os candles vêm direto do mercado — Binance para cripto e Twelve Data para forex.
+            Nenhum robô precisa ser instalado.
+          </p>
           <Link
-            href="/dashboard/mt5"
-            className="flex items-center justify-between rounded-md border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-offwhite hover:bg-white/[0.05]"
+            href="/dashboard/watchlist"
+            className="mt-3 inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-offwhite hover:bg-white/[0.08]"
           >
-            <span>MetaTrader 5</span>
-            <span className="text-[10px] uppercase tracking-widest text-emerald-400">
-              {accountCount > 0 ? `${accountCount} conta(s) conectada(s)` : "Conectar"}
-            </span>
+            Gerenciar watchlist
           </Link>
         </Section>
 
-        {/* Notificações */}
         <Section icon={<Activity className="h-3.5 w-3.5" />} title="Notificações de sinal">
           <p className="text-xs text-zinc-400">
             As preferências de notificação ficam na página{" "}
@@ -157,7 +140,6 @@ export default async function ConfiguracoesPage() {
           </p>
         </Section>
 
-        {/* Zona de risco */}
         <Section
           icon={<Shield className="h-3.5 w-3.5" />}
           title="Zona de risco"
@@ -165,7 +147,7 @@ export default async function ConfiguracoesPage() {
         >
           <p className="mb-4 text-xs text-zinc-400">
             Exclusão da conta apaga permanentemente todos os seus dados do banco
-            (análises, trades, sinais, MT5). Não há como reverter.
+            (análises, trades, sinais, watchlist). Não há como reverter.
           </p>
           <DeleteAccountButton />
         </Section>

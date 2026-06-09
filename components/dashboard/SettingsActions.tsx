@@ -85,8 +85,8 @@ export function DeleteAccountButton() {
           Ação irreversível
         </p>
         <p className="mt-1 text-xs text-rose-300/80">
-          Tudo é apagado: análises, diário de trades, sinais, contas MT5,
-          watchlist e histórico. Para confirmar, digite{" "}
+          Tudo é apagado: análises, diário de trades, sinais, watchlist
+          e histórico. Para confirmar, digite{" "}
           <span className="num text-rose-200">DELETAR</span> abaixo.
         </p>
       </div>

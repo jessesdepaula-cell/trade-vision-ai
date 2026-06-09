@@ -5,17 +5,17 @@ export type BacktestMode = "SMC" | "CLASSICO" | "ALL";
 export type BacktestPeriod = "7d" | "30d" | "90d" | "all";
 
 export type BacktestStats = {
-  totalScans: number;       // total de varreduras (com ou sem setup)
-  detectedSetups: number;   // hasSetup=true
-  setupRate: number;        // % de scans que geraram setup
-  closed: number;           // WIN+LOSS
+  totalScans: number;
+  detectedSetups: number;
+  setupRate: number;
+  closed: number;
   wins: number;
   losses: number;
-  open: number;             // PENDING + FILLED
-  winRate: number;          // %
-  rTotal: number;           // R acumulado
-  rAvg: number;             // R médio por trade
-  expectancy: number;       // expectativa por trade fechado
+  open: number;
+  winRate: number;
+  rTotal: number;
+  rAvg: number;
+  expectancy: number;
   bestTrade: number | null;
   worstTrade: number | null;
 };
@@ -65,42 +65,23 @@ export async function runBacktest(input: {
   signals: BacktestSignal[];
   availableSymbols: string[];
 }> {
-  const accounts = await prisma.mT5Account.findMany({
-    where: { userId: input.userId },
-    select: { id: true },
-  });
-  const accountIds = accounts.map((a) => a.id);
-
-  if (accountIds.length === 0) {
-    return {
-      stats: emptyStats(),
-      equityCurve: [],
-      signals: [],
-      availableSymbols: [],
-    };
-  }
-
   const since = periodStart(input.period);
   const where: {
-    accountId: { in: string[] };
+    userId: string;
     scannedAt?: { gte: Date };
     mode?: string;
     symbol?: string;
-  } = { accountId: { in: accountIds } };
+  } = { userId: input.userId };
   if (since) where.scannedAt = { gte: since };
   if (input.mode === "SMC") where.mode = "SMC";
   if (input.mode === "CLASSICO") where.mode = "CLASSICO";
   if (input.symbol) where.symbol = input.symbol;
 
   const [rawSignals, symbolGroups] = await Promise.all([
-    prisma.signal.findMany({
-      where,
-      orderBy: { scannedAt: "desc" },
-      take: 2000,
-    }),
+    prisma.signal.findMany({ where, orderBy: { scannedAt: "desc" }, take: 2000 }),
     prisma.signal.groupBy({
       by: ["symbol"],
-      where: { accountId: { in: accountIds } },
+      where: { userId: input.userId },
       _count: { _all: true },
       orderBy: { _count: { symbol: "desc" } },
     }),
@@ -127,7 +108,6 @@ export async function runBacktest(input: {
   const rTotal = rValues.reduce((s, v) => s + v, 0);
   const rAvg = rValues.length > 0 ? rTotal / rValues.length : 0;
 
-  // expectancy = winRate*avgWin - lossRate*avgLoss
   const winsR = closed
     .filter((s) => s.status === "WIN")
     .reduce((acc, s) => acc + (s.rMultiple ?? 0), 0);
@@ -143,7 +123,6 @@ export async function runBacktest(input: {
   const bestTrade = rValues.length > 0 ? Math.max(...rValues) : null;
   const worstTrade = rValues.length > 0 ? Math.min(...rValues) : null;
 
-  // equity curve por data de fechamento
   const closedOrdered = closed
     .filter((s) => s.closedAt && s.rMultiple !== null)
     .sort(
@@ -196,22 +175,4 @@ export async function runBacktest(input: {
   }));
 
   return { stats, equityCurve, signals, availableSymbols };
-}
-
-function emptyStats(): BacktestStats {
-  return {
-    totalScans: 0,
-    detectedSetups: 0,
-    setupRate: 0,
-    closed: 0,
-    wins: 0,
-    losses: 0,
-    open: 0,
-    winRate: 0,
-    rTotal: 0,
-    rAvg: 0,
-    expectancy: 0,
-    bestTrade: null,
-    worstTrade: null,
-  };
 }

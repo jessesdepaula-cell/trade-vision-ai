@@ -473,7 +473,7 @@ export function SignalChart({
             onChange={(e) => setTzMode(e.target.value as TzMode)}
             className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-zinc-300 outline-none hover:bg-white/[0.08]"
           >
-            <option value="BROKER" className="bg-[#0a0a0a] text-zinc-300">BROKER (MT5)</option>
+            <option value="BROKER" className="bg-[#0a0a0a] text-zinc-300">EXCHANGE</option>
             <option value="BRT" className="bg-[#0a0a0a] text-zinc-300">BRASIL (GMT-3)</option>
             <option value="EST" className="bg-[#0a0a0a] text-zinc-300">NY (GMT-4)</option>
             <option value="GMT" className="bg-[#0a0a0a] text-zinc-300">LONDRES (GMT+1)</option>

@@ -2,16 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BookOpen, Crosshair, FlaskConical, Radar, Settings, Zap } from "lucide-react";
+import { BarChart3, BookOpen, Crosshair, Eye, FlaskConical, Radar, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/dashboard", icon: Crosshair, label: "Análise" },
   { href: "/dashboard/sinais", icon: Radar, label: "Sinais ao vivo" },
+  { href: "/dashboard/watchlist", icon: Eye, label: "Watchlist" },
   { href: "/dashboard/diario", icon: BookOpen, label: "Diário" },
   { href: "/dashboard/estatisticas", icon: BarChart3, label: "Estatísticas" },
   { href: "/dashboard/backtest", icon: FlaskConical, label: "Backtest" },
-  { href: "/dashboard/mt5", icon: Zap, label: "MT5" },
   { href: "/dashboard/configuracoes", icon: Settings, label: "Configurações" },
 ];
 

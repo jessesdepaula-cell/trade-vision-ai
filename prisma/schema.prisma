@@ -21,7 +21,9 @@ model User {
   updatedAt          DateTime  @updatedAt
   analyses           Analysis[]
   trades             Trade[]
-  mt5Accounts        MT5Account[]
+  watchlist          Watchlist[]
+  signals            Signal[]
+  ticks              MarketTick[]
 }
 
 model Analysis {
@@ -71,88 +73,31 @@ model Trade {
   @@index([userId, mode, outcome])
 }
 
-model MT5Account {
-  id              String       @id @default(cuid())
-  userId          String
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  apiToken        String       @unique
-  label           String?
-
-  // Live account info (atualizado via heartbeat)
-  accountNumber   BigInt?
-  accountName     String?
-  accountServer   String?
-  accountCompany  String?
-  accountCurrency String?
-  leverage        Int?
-  balance         Float?
-  equity          Float?
-  margin          Float?
-  freeMargin      Float?
-  marginLevel     Float?
-
-  pingMs          Int?
-  connectedAt     DateTime?
-  lastSeenAt      DateTime?
-
-  createdAt       DateTime     @default(now())
-
-  orders          MT5Order[]
-  watchlist       Watchlist[]
-  signals         Signal[]
-  ticks           MarketTick[]
-
-  @@index([userId])
-}
-
-model MT5Order {
-  id         String      @id @default(cuid())
-  accountId  String
-  account    MT5Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  symbol     String
-  side       String
-  volume     Float       @default(0.01)
-  entryType  String      @default("MARKET")
-  entryPrice Float?
-  stopLoss   Float?
-  takeProfit Float?
-  comment    String?
-  status     String      @default("PENDING")
-  mt5Ticket  BigInt?
-  errorMsg   String?
-  createdAt  DateTime    @default(now())
-  pickedAt   DateTime?
-  filledAt   DateTime?
-
-  @@index([accountId, status])
-  @@index([accountId, createdAt])
-}
-
 model Watchlist {
-  id          String      @id @default(cuid())
-  accountId   String
-  account     MT5Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   symbol      String
-  timeframe   String      @default("M15")
-  mode        String      // "SMC" | "CLASSICO"
-  active      Boolean     @default(true)
+  timeframe   String   @default("M15")
+  mode        String   // "SMC" | "CLASSICO"
+  active      Boolean  @default(true)
   lastScanAt  DateTime?
-  createdAt   DateTime    @default(now())
+  createdAt   DateTime @default(now())
 
-  @@unique([accountId, symbol, timeframe, mode])
-  @@index([accountId, active])
+  @@unique([userId, symbol, timeframe, mode])
+  @@index([userId, active])
 }
 
 model Signal {
-  id                String     @id @default(cuid())
-  accountId         String
-  account           MT5Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   symbol            String
   timeframe         String
   mode              String
 
-  hasSetup          Boolean    @default(true)
+  hasSetup          Boolean  @default(true)
   direction         String?
   probability       Int?
   confidence        String?
@@ -167,40 +112,37 @@ model Signal {
   recommendedTarget Int?
   riskReward        String?
 
-  structure         String?    @db.Text
-  justification     String?    @db.Text
+  structure         String?  @db.Text
+  justification     String?  @db.Text
 
-  // Manual outputs (SMC ou Clássico)
-  tipoSetup         String?    // "Spring"|"Upthrust"|"Pullback Long"|"Pullback Short"|"Nenhum"
-  checklistSmc      Json?      // { vies_HTF_a_favor, liquidez_identificada, ... }
-  checklistClassico Json?      // { tendencia_SMA200_alinhada, alinhamento_perfeito_medias, ... }
+  tipoSetup         String?
+  checklistSmc      Json?
+  checklistClassico Json?
 
-  // Tracking
-  status            String     @default("PENDING") // PENDING | FILLED | WIN | LOSS | EXPIRED | NO_SETUP
+  status            String   @default("PENDING") // PENDING | FILLED | WIN | LOSS | EXPIRED | NO_SETUP
   filledAt          DateTime?
   closedAt          DateTime?
   exitPrice         Float?
   rMultiple         Float?
 
-  // Auto-catalog
-  tradeCreated      Boolean    @default(false)
+  tradeCreated      Boolean  @default(false)
 
-  scannedAt         DateTime   @default(now())
+  scannedAt         DateTime @default(now())
   candleData        Json?
 
-  @@index([accountId, scannedAt])
-  @@index([accountId, status])
-  @@index([accountId, symbol, timeframe])
+  @@index([userId, scannedAt])
+  @@index([userId, status])
+  @@index([userId, symbol, timeframe])
 }
 
 model MarketTick {
-  accountId   String
-  account     MT5Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  symbol      String
-  bid         Float
-  ask         Float
-  spread      Float
-  updatedAt   DateTime    @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol    String
+  bid       Float
+  ask       Float
+  spread    Float
+  updatedAt DateTime @default(now())
 
-  @@id([accountId, symbol])
+  @@id([userId, symbol])
 }

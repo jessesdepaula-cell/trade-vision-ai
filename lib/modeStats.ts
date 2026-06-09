@@ -2,15 +2,15 @@ import { prisma } from "@/lib/prisma";
 
 export type ModeStats = {
   mode: "SMC" | "CLASSICO";
-  total: number;       // trades fechados (WIN+LOSS+BREAKEVEN)
+  total: number;
   wins: number;
   losses: number;
   breakeven: number;
   open: number;
-  winRate: number;     // 0-100 (apenas WIN/LOSS, ignora BREAKEVEN)
+  winRate: number;
   rTotal: number;
   avgR: number;
-  expectancy: number;  // R esperado por trade
+  expectancy: number;
 };
 
 const EMPTY: Omit<ModeStats, "mode"> = {
@@ -25,27 +25,19 @@ const EMPTY: Omit<ModeStats, "mode"> = {
   expectancy: 0,
 };
 
-export async function getModeStats(userId: string): Promise<{ smc: ModeStats; classico: ModeStats }> {
-  // Fonte: tabela Signal (mesma usada pelos KPIs) — garante consistência
-  // entre o medidor e os cards de "Pendentes / Em execução / Ganhos / Perdas".
-  const accounts = await prisma.mT5Account.findMany({
-    where: { userId },
-    select: { id: true },
+export async function getModeStats(
+  userId: string,
+): Promise<{ smc: ModeStats; classico: ModeStats }> {
+  const signals = await prisma.signal.findMany({
+    where: { userId, hasSetup: true },
+    select: { mode: true, status: true, rMultiple: true },
   });
-  const accountIds = accounts.map((a) => a.id);
-
-  const signals = accountIds.length
-    ? await prisma.signal.findMany({
-        where: { accountId: { in: accountIds }, hasSetup: true },
-        select: { mode: true, status: true, rMultiple: true },
-      })
-    : [];
 
   function statusToOutcome(s: string): "WIN" | "LOSS" | "BREAKEVEN" | "OPEN" {
     if (s === "WIN") return "WIN";
     if (s === "LOSS") return "LOSS";
     if (s === "PENDING" || s === "FILLED") return "OPEN";
-    return "BREAKEVEN"; // EXPIRED, NO_SETUP, etc. — não conta no winrate
+    return "BREAKEVEN";
   }
 
   function calc(mode: "SMC" | "CLASSICO"): ModeStats {
@@ -62,9 +54,12 @@ export async function getModeStats(userId: string): Promise<{ smc: ModeStats; cl
     const closed = subset.filter((t) => t.outcome !== "OPEN");
     const rTotal = closed.reduce((s, t) => s + (t.rMultiple ?? 0), 0);
     const avgR = total > 0 ? rTotal / total : 0;
-    // expectancy = winRate*avgWin - lossRate*avgLoss
-    const winsR = closed.filter((t) => t.outcome === "WIN").reduce((s, t) => s + (t.rMultiple ?? 0), 0);
-    const lossR = closed.filter((t) => t.outcome === "LOSS").reduce((s, t) => s + (t.rMultiple ?? 0), 0);
+    const winsR = closed
+      .filter((t) => t.outcome === "WIN")
+      .reduce((s, t) => s + (t.rMultiple ?? 0), 0);
+    const lossR = closed
+      .filter((t) => t.outcome === "LOSS")
+      .reduce((s, t) => s + (t.rMultiple ?? 0), 0);
     const avgWin = wins > 0 ? winsR / wins : 0;
     const avgLoss = losses > 0 ? Math.abs(lossR / losses) : 0;
     const winP = denom > 0 ? wins / denom : 0;
@@ -79,11 +74,10 @@ export async function getModeStats(userId: string): Promise<{ smc: ModeStats; cl
   };
 }
 
-export function classifyAccuracy(winRate: number, sample: number): {
-  label: string;
-  tone: "emerald" | "amber" | "rose" | "muted";
-  hint: string;
-} {
+export function classifyAccuracy(
+  winRate: number,
+  sample: number,
+): { label: string; tone: "emerald" | "amber" | "rose" | "muted"; hint: string } {
   if (sample < 10) {
     return {
       label: "Amostra insuficiente",

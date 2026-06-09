@@ -23,54 +23,36 @@ export default async function SinaisPage({
   const modoFilter = params?.modo;
   const statusFilter = params?.status;
 
-  const accounts = await prisma.mT5Account.findMany({
-    where: { userId: user.id },
-    select: { id: true },
-  });
-  const accountIds = accounts.map((a) => a.id);
-
   const where: {
-    accountId: { in: string[] };
+    userId: string;
     mode?: string;
     status?: string;
     hasSetup?: boolean;
-  } = { accountId: { in: accountIds } };
+  } = { userId: user.id };
 
   if (modoFilter === "smc") where.mode = "SMC";
   if (modoFilter === "classico") where.mode = "CLASSICO";
   if (statusFilter === "abertos") where.status = "FILLED";
   if (statusFilter === "pendentes") where.status = "PENDING";
-  if (statusFilter === "fechados") {
-    // mostrar WIN/LOSS — handle via post filter
-  }
 
-  // Pega janela maior para conseguir agregar histórico de fechados, mas
-  // depois reduz a 1 sinal por (símbolo, timeframe, modo) — o mais recente.
-  // Exceção: sinais já fechados (WIN/LOSS) ou em execução (FILLED) ficam
-  // visíveis individualmente para o usuário ver o histórico ativo.
   const allRecent = await prisma.signal.findMany({
     where,
     orderBy: { scannedAt: "desc" },
     take: 300,
   });
 
-  // Dedup base: 1 sinal por (símbolo, timeframe, modo) — o mais recente.
-  // Usado para a lista padrão e para os contadores das abas.
   const seen = new Set<string>();
   const deduped: typeof allRecent = [];
   for (const s of allRecent) {
-    // Limpa sufixos para comparar de forma justa (ex: EURUSDXX -> EURUSD)
-    const baseSymbol = s.symbol.replace(/XX|xx|m|\.r|pro|_i|\.a|cent|x|\.dk|\+/g, "");
-    const key = `${baseSymbol}|${s.timeframe}|${s.mode}`;
+    const key = `${s.symbol}|${s.timeframe}|${s.mode}`;
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(s);
   }
 
-  // Adiciona itens da watchlist que não possuem sinal recente no banco
   if (statusFilter !== "fechados") {
     const watchlist = await prisma.watchlist.findMany({
-      where: { accountId: { in: accountIds }, active: true },
+      where: { userId: user.id, active: true },
     });
     let filteredWatchlist = watchlist;
     if (modoFilter === "smc") {
@@ -80,16 +62,17 @@ export default async function SinaisPage({
     }
 
     for (const w of filteredWatchlist) {
-      const hasSignal = deduped.some((s) => {
-        const sBase = s.symbol.replace(/XX|xx|m|\.r|pro|_i|\.a|cent|x|\.dk|\+/g, "").toUpperCase();
-        const wBase = w.symbol.toUpperCase();
-        return s.mode === w.mode && s.timeframe === w.timeframe && sBase === wBase;
-      });
+      const hasSignal = deduped.some(
+        (s) =>
+          s.mode === w.mode &&
+          s.timeframe === w.timeframe &&
+          s.symbol.toUpperCase() === w.symbol.toUpperCase(),
+      );
 
       if (!hasSignal) {
         deduped.push({
           id: `mock-${w.id}`,
-          accountId: w.accountId,
+          userId: user.id,
           symbol: w.symbol,
           timeframe: w.timeframe,
           mode: w.mode,
@@ -105,7 +88,7 @@ export default async function SinaisPage({
           recommendedTarget: null,
           riskReward: null,
           structure: null,
-          justification: "Aguardando primeiro escaneamento do robô MetaTrader 5...",
+          justification: "Aguardando primeiro scan automático…",
           status: "NO_SETUP",
           exitPrice: null,
           rMultiple: null,
@@ -117,19 +100,16 @@ export default async function SinaisPage({
           tradeCreated: false,
           filledAt: null,
           closedAt: null,
-        } as any);
+        } as (typeof allRecent)[number]);
       }
     }
   }
 
-  // No filtro "Fechados" o usuário quer histórico completo de trades — NÃO dedupa.
-  // Nos demais filtros, mostra só o último sinal de cada par/modo.
   const visible: typeof allRecent =
     statusFilter === "fechados"
       ? allRecent.filter((s) => s.status === "WIN" || s.status === "LOSS")
       : deduped;
 
-  // KPIs somam o histórico real (allRecent), não a versão dedupada
   const stats = {
     pending: allRecent.filter((s) => s.status === "PENDING" && s.hasSetup).length,
     filled: allRecent.filter((s) => s.status === "FILLED").length,
@@ -137,11 +117,15 @@ export default async function SinaisPage({
     lost: allRecent.filter((s) => s.status === "LOSS").length,
     noSetup: allRecent.filter((s) => !s.hasSetup).length,
   };
-  const signals = deduped; // contadores das abas refletem 1 por par/modo
+  const signals = deduped;
   const totalClosed = stats.won + stats.lost;
   const winRate = totalClosed > 0 ? (stats.won / totalClosed) * 100 : 0;
 
   const modeStats = await getModeStats(user.id);
+
+  const watchlistCount = await prisma.watchlist.count({
+    where: { userId: user.id, active: true },
+  });
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
@@ -158,7 +142,7 @@ export default async function SinaisPage({
             </span>
           </div>
           <p className="mt-1 text-sm text-zinc-400">
-            Setups identificados pela IA escaneando sua watchlist a cada 15 minutos.
+            Setups identificados pela IA a cada 15 minutos, a partir de candles puxados direto do mercado.
           </p>
         </div>
 
@@ -172,7 +156,6 @@ export default async function SinaisPage({
         </div>
       </div>
 
-      {/* Tabs por modo */}
       <div className="mb-6 border-b border-white/10">
         <nav className="flex gap-1">
           <ModeTab href={buildModeHref(undefined, statusFilter)} active={!modoFilter} count={signals.length} label="Todos" />
@@ -193,7 +176,6 @@ export default async function SinaisPage({
         </nav>
       </div>
 
-      {/* Notificações de sinais fortes */}
       <section className="mb-4">
         <SignalNotifications
           signals={allRecent.map((s) => ({
@@ -210,7 +192,6 @@ export default async function SinaisPage({
         />
       </section>
 
-      {/* Medidor de assertividade por modo (segue a aba ativa) */}
       <section className="mb-6">
         <h2 className="mb-3 text-[10px] uppercase tracking-widest text-zinc-500">
           Assertividade por modo de análise
@@ -218,9 +199,7 @@ export default async function SinaisPage({
         <ModeAccuracyMeter
           smc={modeStats.smc}
           classico={modeStats.classico}
-          show={
-            modoFilter === "smc" ? "smc" : modoFilter === "classico" ? "classico" : "both"
-          }
+          show={modoFilter === "smc" ? "smc" : modoFilter === "classico" ? "classico" : "both"}
         />
       </section>
 
@@ -236,11 +215,11 @@ export default async function SinaisPage({
         />
       </section>
 
-      {accountIds.length === 0 ? (
+      {watchlistCount === 0 ? (
         <div className="glass rounded-xl p-8 text-center text-sm text-zinc-400">
-          Conecte uma conta MT5 em{" "}
-          <a href="/dashboard/mt5" className="text-emerald-400 underline-offset-2 hover:underline">
-            /dashboard/mt5
+          Sua watchlist está vazia. Configure em{" "}
+          <a href="/dashboard/watchlist" className="text-emerald-400 underline-offset-2 hover:underline">
+            /dashboard/watchlist
           </a>{" "}
           para começar a receber sinais automáticos.
         </div>
@@ -250,7 +229,7 @@ export default async function SinaisPage({
             <Radar className="mx-auto h-5 w-5 text-zinc-600" />
             <p className="mt-3">Nenhum sinal no filtro selecionado ainda.</p>
             <p className="mt-1 text-xs text-zinc-500">
-              O EA scaner roda a cada fechamento de M15. Aguarde…
+              O scan roda a cada 15 minutos. Aguarde…
             </p>
           </div>
         </div>
@@ -365,9 +344,7 @@ function FilterChip({
   label: string;
   active: boolean;
 }) {
-  const href = value
-    ? `/dashboard/sinais?${param}=${value}`
-    : `/dashboard/sinais`;
+  const href = value ? `/dashboard/sinais?${param}=${value}` : `/dashboard/sinais`;
   return (
     <a
       href={href}
@@ -383,7 +360,15 @@ function FilterChip({
   );
 }
 
-function Kpi({ label, value, tone }: { label: string; value: number | string; tone: "emerald" | "rose" | "amber" }) {
+function Kpi({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number | string;
+  tone: "emerald" | "rose" | "amber";
+}) {
   return (
     <div className="glass rounded-xl p-4">
       <div className="text-[10px] uppercase tracking-widest text-zinc-500">{label}</div>

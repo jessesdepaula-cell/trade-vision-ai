@@ -18,22 +18,17 @@ export async function GET() {
   const user = await getOrCreateUser();
   if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
 
-  const accounts = await prisma.mT5Account.findMany({
+  const signals = await prisma.signal.findMany({
     where: { userId: user.id },
-    select: { id: true },
+    orderBy: { scannedAt: "desc" },
+    take: 5000,
   });
-  const accIds = accounts.map((a) => a.id);
-  if (accIds.length === 0) {
+
+  if (signals.length === 0) {
     return new NextResponse("scannedAt,nenhum sinal\n", {
       headers: { "Content-Type": "text/csv; charset=utf-8" },
     });
   }
-
-  const signals = await prisma.signal.findMany({
-    where: { accountId: { in: accIds } },
-    orderBy: { scannedAt: "desc" },
-    take: 5000,
-  });
 
   const headers = [
     "scannedAt",

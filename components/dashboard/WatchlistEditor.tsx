@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Power, Trash2 } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Plus, Power, RefreshCw, Trash2 } from "lucide-react";
 import { addWatch, removeWatch, toggleWatch } from "@/app/actions/watchlist";
 import { cn } from "@/lib/utils";
 
@@ -14,31 +14,74 @@ type Item = {
   lastScanAt: Date | null;
 };
 
+type SymbolOpt = { symbol: string; label: string; assetClass: string };
+
 export function WatchlistEditor({
-  accountId,
   items,
+  symbols,
 }: {
-  accountId: string;
   items: Item[];
+  symbols: SymbolOpt[];
 }) {
   const [adding, setAdding] = useState(false);
+  const [scanningId, setScanningId] = useState<string | null>(null);
+  const [scanningAll, setScanningAll] = useState(false);
+  const [, startTransition] = useTransition();
+
+  async function scanItem(id: string) {
+    setScanningId(id);
+    try {
+      await fetch("/api/scan/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ watchlistId: id }),
+      });
+      startTransition(() => {
+        window.location.reload();
+      });
+    } finally {
+      setScanningId(null);
+    }
+  }
+
+  async function scanAll() {
+    setScanningAll(true);
+    try {
+      await fetch("/api/scan/run", { method: "POST" });
+      startTransition(() => {
+        window.location.reload();
+      });
+    } finally {
+      setScanningAll(false);
+    }
+  }
 
   return (
     <div className="glass rounded-xl p-5">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <p className="text-[10px] uppercase tracking-widest text-zinc-500">Watchlist</p>
           <p className="mt-0.5 text-sm text-offwhite">
-            Símbolos escaneados pelo EA a cada 15 minutos
+            Símbolos escaneados automaticamente pela IA a cada 15 minutos
           </p>
         </div>
-        <button
-          onClick={() => setAdding((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-offwhite hover:bg-white/[0.08]"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Adicionar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={scanAll}
+            disabled={scanningAll || items.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/[0.08] px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/[0.15] disabled:opacity-50"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", scanningAll && "animate-spin")} />
+            {scanningAll ? "Escaneando…" : "Escanear agora"}
+          </button>
+          <button
+            onClick={() => setAdding((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-offwhite hover:bg-white/[0.08]"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Adicionar
+          </button>
+        </div>
       </div>
 
       {adding && (
@@ -49,15 +92,19 @@ export function WatchlistEditor({
           }}
           className="mb-3 flex flex-wrap items-end gap-2 rounded-md border border-white/10 bg-white/[0.02] p-3"
         >
-          <input type="hidden" name="accountId" value={accountId} />
           <label className="block">
             <span className="mb-0.5 block text-[10px] uppercase tracking-widest text-zinc-500">Símbolo</span>
-            <input
+            <select
               name="symbol"
-              placeholder="EURUSD"
               required
-              className="num w-28 rounded-md border border-white/10 bg-white/[0.02] px-2 py-1.5 text-xs outline-none focus:border-emerald-500/50"
-            />
+              className="rounded-md border border-white/10 bg-white/[0.02] px-2 py-1.5 text-xs outline-none focus:border-emerald-500/50"
+            >
+              {symbols.map((s) => (
+                <option key={s.symbol} value={s.symbol} className="bg-charcoal">
+                  {s.symbol} — {s.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="block">
             <span className="mb-0.5 block text-[10px] uppercase tracking-widest text-zinc-500">TF</span>
@@ -66,8 +113,10 @@ export function WatchlistEditor({
               defaultValue="M15"
               className="rounded-md border border-white/10 bg-white/[0.02] px-2 py-1.5 text-xs outline-none focus:border-emerald-500/50"
             >
-              {["M5", "M15", "M30", "H1", "H4", "D1"].map((t) => (
-                <option key={t} value={t} className="bg-charcoal">{t}</option>
+              {["M15", "M30", "H1", "H4", "D1"].map((t) => (
+                <option key={t} value={t} className="bg-charcoal">
+                  {t}
+                </option>
               ))}
             </select>
           </label>
@@ -78,8 +127,12 @@ export function WatchlistEditor({
               defaultValue="SMC"
               className="rounded-md border border-white/10 bg-white/[0.02] px-2 py-1.5 text-xs outline-none focus:border-emerald-500/50"
             >
-              <option value="SMC" className="bg-charcoal">SMC</option>
-              <option value="CLASSICO" className="bg-charcoal">Clássico</option>
+              <option value="SMC" className="bg-charcoal">
+                SMC
+              </option>
+              <option value="CLASSICO" className="bg-charcoal">
+                Clássico
+              </option>
             </select>
           </label>
           <button className="rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-medium text-charcoal hover:bg-emerald-400">
@@ -101,7 +154,9 @@ export function WatchlistEditor({
             key={it.id}
             className={cn(
               "flex items-center gap-3 rounded-md border px-3 py-2 transition",
-              it.active ? "border-white/10 bg-white/[0.02]" : "border-white/5 bg-white/[0.01] opacity-50",
+              it.active
+                ? "border-white/10 bg-white/[0.02]"
+                : "border-white/5 bg-white/[0.01] opacity-50",
             )}
           >
             <div className="flex flex-1 items-center gap-2">
@@ -123,6 +178,15 @@ export function WatchlistEditor({
                 ? `Último: ${new Date(it.lastScanAt).toLocaleTimeString("pt-BR")}`
                 : "Sem scan ainda"}
             </span>
+            <button
+              type="button"
+              onClick={() => scanItem(it.id)}
+              disabled={scanningId === it.id || !it.active}
+              title="Escanear este item agora"
+              className="grid h-7 w-7 place-items-center rounded-md text-emerald-400 hover:bg-white/[0.04] disabled:opacity-30"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", scanningId === it.id && "animate-spin")} />
+            </button>
             <form action={toggleWatch}>
               <input type="hidden" name="id" value={it.id} />
               <button
