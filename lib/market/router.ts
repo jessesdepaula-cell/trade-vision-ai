@@ -2,6 +2,7 @@ import { findSymbol, type SymbolSpec } from "./symbols";
 import type { Candle, Quote, Timeframe } from "./types";
 import { binanceCandles, binanceQuote } from "./providers/binance";
 import { twelveCandles, twelveQuote } from "./providers/twelvedata";
+import { yahooCandles, yahooQuote } from "./providers/yahoo";
 
 type CacheEntry<T> = { value: T; expiresAt: number };
 const memCache = new Map<string, CacheEntry<unknown>>();
@@ -47,11 +48,27 @@ export async function getCandles(
 
   let candles: Candle[];
   if (spec.assetClass === "crypto" && spec.binance) {
-    candles = await binanceCandles(spec.binance, tf, limit);
-  } else if (spec.assetClass === "forex" && spec.twelvedata) {
-    candles = await twelveCandles(spec.twelvedata, tf, limit);
+    try {
+      candles = await binanceCandles(spec.binance, tf, limit);
+    } catch (e) {
+      if (spec.twelvedata) {
+        candles = await twelveCandles(spec.twelvedata, tf, limit);
+      } else {
+        throw e;
+      }
+    }
   } else {
-    throw new Error(`Sem provider para ${symbol}`);
+    // Para Forex (e outros sem binance), usamos Yahoo Finance como primário e TwelveData como fallback
+    try {
+      candles = await yahooCandles(spec.symbol, tf, limit);
+    } catch (e) {
+      console.warn(`[getCandles] Falha no Yahoo Finance para ${spec.symbol}. Tentando TwelveData... Erro:`, e instanceof Error ? e.message : e);
+      if (spec.twelvedata) {
+        candles = await twelveCandles(spec.twelvedata, tf, limit);
+      } else {
+        throw e;
+      }
+    }
   }
 
   setCached(cacheKey, candles, CANDLES_TTL[tf]);
@@ -66,11 +83,27 @@ export async function getQuote(symbol: string): Promise<Quote> {
 
   let q: Quote;
   if (spec.assetClass === "crypto" && spec.binance) {
-    q = await binanceQuote(spec.binance);
-  } else if (spec.assetClass === "forex" && spec.twelvedata) {
-    q = await twelveQuote(spec.twelvedata);
+    try {
+      q = await binanceQuote(spec.binance);
+    } catch (e) {
+      if (spec.twelvedata) {
+        q = await twelveQuote(spec.twelvedata);
+      } else {
+        throw e;
+      }
+    }
   } else {
-    throw new Error(`Sem provider para ${symbol}`);
+    // Para Forex, usamos Yahoo Finance como primário e TwelveData como fallback
+    try {
+      q = await yahooQuote(spec.symbol);
+    } catch (e) {
+      console.warn(`[getQuote] Falha no Yahoo Finance para ${spec.symbol}. Tentando TwelveData... Erro:`, e instanceof Error ? e.message : e);
+      if (spec.twelvedata) {
+        q = await twelveQuote(spec.twelvedata);
+      } else {
+        throw e;
+      }
+    }
   }
 
   // mantém símbolo canônico (não o do provider)
@@ -78,3 +111,4 @@ export async function getQuote(symbol: string): Promise<Quote> {
   setCached(cacheKey, q, spec.assetClass === "crypto" ? 5_000 : 30_000);
   return q;
 }
+

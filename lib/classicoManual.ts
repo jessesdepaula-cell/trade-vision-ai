@@ -46,7 +46,7 @@ EXECUÇÃO:
 - ENTRADA VENDA: Sell Stop 1 tick ABAIXO da mínima do Candle de Gatilho.
 - STOP COMPRA: 2-3 pips abaixo da mínima do Gatilho OU abaixo da EMA 50 (o que for mais seguro).
 - STOP VENDA: 2-3 pips acima da máxima do Gatilho OU acima da EMA 50.
-- TP1: topo/fundo anterior mais recente (R:R mínimo 1:1.5).
+- TP1: topo/fundo anterior mais recente — R:R mínimo 1:1 (ou seja, a distância da entrada ao TP1 deve ser de no mínimo o mesmo tamanho do stop loss).
 - TP2: projeção de Fibonacci 127%/161.8% OU saída quando o candle FECHAR do lado oposto da EMA 9 (trailing dinâmico).
 - TP3: extensão maior (R:R 1:3+).
 

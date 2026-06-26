@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { scanWithAI, type Candle } from "@/lib/aiScan";
 import { evaluateOpenSignalsAgainstCandles } from "@/lib/signalTracker";
+import { sendSignalEmail } from "@/lib/email";
 import { getCandles } from "@/lib/market/router";
 import { findSymbol } from "@/lib/market/symbols";
 import type { Timeframe } from "@/lib/market/types";
@@ -85,6 +86,39 @@ export async function scanWatchlistItem(
     // não interrompe
   }
 
+  // Verifica se já existe um sinal ativo (PENDING ou FILLED) para este ativo/timeframe/modo
+  const activeSignal = await prisma.signal.findFirst({
+    where: {
+      userId: input.userId,
+      symbol: spec.symbol,
+      timeframe: tf,
+      mode: input.mode,
+      status: { in: ["PENDING", "FILLED"] },
+    },
+  });
+
+  if (activeSignal) {
+    // Se já existe um sinal ativo, pulamos o novo escaneamento da IA para evitar duplicidade.
+    if (input.watchlistId) {
+      await prisma.watchlist
+        .updateMany({
+          where: { id: input.watchlistId, userId: input.userId },
+          data: { lastScanAt: new Date() },
+        })
+        .catch(() => null);
+    }
+    return {
+      ok: true,
+      signalId: activeSignal.id,
+      hasSetup: activeSignal.hasSetup,
+      direction: activeSignal.direction,
+      entry: activeSignal.entryPrice,
+      stop: activeSignal.stopPrice,
+      target: activeSignal.target1,
+      tracked,
+    };
+  }
+
   // IA
   let result;
   let aiError: string | null = null;
@@ -107,46 +141,99 @@ export async function scanWatchlistItem(
   const num = (v: unknown): number | null =>
     typeof v === "number" && isFinite(v) ? v : null;
 
+  // Validação de R:R mínimo de 1:1 no Alvo 1
+  let hasSetup = !!result.hasSetup;
+  let rrValidationMessage = "";
+  if (hasSetup) {
+    const entry = num(result.entryPrice);
+    const stop = num(result.stopPrice);
+    const t1 = num(result.target1);
+    if (entry !== null && stop !== null && t1 !== null) {
+      const risk = Math.abs(entry - stop);
+      const reward = Math.abs(t1 - entry);
+      if (risk <= 0) {
+        hasSetup = false;
+        rrValidationMessage = "Stop Loss inválido (igual à entrada).";
+      } else if ((reward / risk) < 0.98) {
+        hasSetup = false;
+        rrValidationMessage = `Risco/Retorno no Alvo 1 de ${parseFloat((reward / risk).toFixed(2))} é menor do que 1:1.`;
+      }
+    } else {
+      hasSetup = false;
+      rrValidationMessage = "Faltam parâmetros de Entrada, Stop Loss ou Alvo 1.";
+    }
+  }
+
   const signal = await prisma.signal.create({
     data: {
       userId: input.userId,
       symbol: spec.symbol,
       timeframe: tf,
       mode: input.mode,
-      hasSetup: !!result.hasSetup,
-      direction: result.direction ?? null,
+      hasSetup: hasSetup,
+      direction: hasSetup ? (result.direction ?? null) : null,
       probability:
-        typeof result.probability === "number"
+        hasSetup && typeof result.probability === "number"
           ? Math.max(0, Math.min(100, Math.round(result.probability)))
           : null,
-      confidence: result.confidence ?? null,
-      entryPrice: num(result.entryPrice),
-      entryZoneLow: num(result.entryZoneLow),
-      entryZoneHigh: num(result.entryZoneHigh),
-      stopPrice: num(result.stopPrice),
-      target1: num(result.target1),
-      target2: num(result.target2),
-      target3: num(result.target3),
+      confidence: hasSetup ? (result.confidence ?? null) : null,
+      entryPrice: hasSetup ? num(result.entryPrice) : null,
+      entryZoneLow: hasSetup ? num(result.entryZoneLow) : null,
+      entryZoneHigh: hasSetup ? num(result.entryZoneHigh) : null,
+      stopPrice: hasSetup ? num(result.stopPrice) : null,
+      target1: hasSetup ? num(result.target1) : null,
+      target2: hasSetup ? num(result.target2) : null,
+      target3: hasSetup ? num(result.target3) : null,
       recommendedTarget:
-        result.recommendedTarget && [1, 2, 3].includes(result.recommendedTarget)
+        hasSetup && result.recommendedTarget && [1, 2, 3].includes(result.recommendedTarget)
           ? result.recommendedTarget
           : null,
-      riskReward: result.riskReward ?? null,
+      riskReward: hasSetup ? (result.riskReward ?? null) : null,
       structure: result.structure ?? null,
-      justification: result.justification ?? null,
-      tipoSetup: result.tipo_setup ?? null,
+      justification: hasSetup ? (result.justification ?? null) : `${result.justification ?? ""} (Rejeitado: ${rrValidationMessage})`,
+      tipoSetup: hasSetup ? (result.tipo_setup ?? null) : null,
       checklistSmc:
-        input.mode === "SMC" && result.checklist_smc
+        hasSetup && input.mode === "SMC" && result.checklist_smc
           ? (result.checklist_smc as object)
           : undefined,
       checklistClassico:
-        input.mode === "CLASSICO" && result.checklist_classico
+        hasSetup && input.mode === "CLASSICO" && result.checklist_classico
           ? (result.checklist_classico as object)
           : undefined,
-      status: result.hasSetup ? "PENDING" : "NO_SETUP",
+      status: hasSetup ? "PENDING" : "NO_SETUP",
       candleData: candles.slice(-3000) as object,
     },
   });
+
+  // Disparo assíncrono do e-mail de alerta para o assinante
+  if (hasSetup && signal.status === "PENDING") {
+    prisma.user
+      .findUnique({
+        where: { id: input.userId },
+        select: { email: true },
+      })
+      .then((u) => {
+        if (u?.email) {
+          sendSignalEmail(u.email, {
+            symbol: signal.symbol,
+            timeframe: signal.timeframe,
+            mode: signal.mode,
+            direction: signal.direction ?? "NEUTRO",
+            entryPrice: signal.entryPrice,
+            stopPrice: signal.stopPrice,
+            target1: signal.target1,
+            target2: signal.target2,
+            target3: signal.target3,
+            riskReward: signal.riskReward,
+            justification: signal.justification,
+            tipoSetup: signal.tipoSetup,
+          }).catch((err) => console.error("[sendSignalEmail Catch]", err));
+        }
+      })
+      .catch((err) => {
+        console.error("[Email User Query Error]", err);
+      });
+  }
 
   if (input.watchlistId) {
     await prisma.watchlist
@@ -182,7 +269,15 @@ export async function scanAllActiveForUser(userId: string) {
     ok: boolean;
     error?: string;
   }> = [];
-  for (const w of watchlist) {
+  
+  for (let i = 0; i < watchlist.length; i++) {
+    const w = watchlist[i];
+    
+    // Apenas aguarda de 15 segundos entre itens (evita estourar o limite de tokens/minuto da OpenAI)
+    if (i > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 15000));
+    }
+    
     const r = await scanWatchlistItem({
       userId,
       watchlistId: w.id,
@@ -190,6 +285,7 @@ export async function scanAllActiveForUser(userId: string) {
       timeframe: w.timeframe,
       mode: w.mode as "SMC" | "CLASSICO",
     });
+    
     results.push({
       watchlistId: w.id,
       symbol: w.symbol,

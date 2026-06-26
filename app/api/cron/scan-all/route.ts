@@ -23,7 +23,12 @@ export async function GET(req: Request) {
     select: { id: true },
   });
 
-  const summary: Array<{ userId: string; scanned: number; failed: number }> = [];
+  const summary: Array<{
+    userId: string;
+    scanned: number;
+    failed: number;
+    details: any;
+  }> = [];
 
   for (const u of users) {
     try {
@@ -32,12 +37,14 @@ export async function GET(req: Request) {
         userId: u.id,
         scanned: results.filter((r) => r.ok).length,
         failed: results.filter((r) => !r.ok).length,
+        details: results,
       });
     } catch (e) {
       summary.push({
         userId: u.id,
         scanned: 0,
         failed: -1,
+        details: e instanceof Error ? e.message : String(e),
       });
     }
   }

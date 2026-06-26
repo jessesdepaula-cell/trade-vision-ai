@@ -48,7 +48,7 @@ FILTROS DE INVALIDAÇÃO (qualquer um = SEM SETUP, hasSetup=false, score=0):
 EXECUÇÃO:
 - ENTRADA: Limit no topo do OB de compra (ou base do OB de venda). 50% do FVG é o ponto ideal.
 - STOP: 1-2 pips ABAIXO da mínima do Spring (compra) ou ACIMA da máxima do Upthrust (venda).
-- TP1: próxima liquidez interna oposta — R:R mínimo 1:2.
+- TP1: próxima liquidez interna oposta — R:R mínimo 1:1 (ou seja, a distância da entrada ao TP1 deve ser de no mínimo o mesmo tamanho do stop loss).
 - TP2: próxima liquidez maior do HTF — R:R 1:3+.
 - TP3: extensão (1:4+) quando estrutura HTF permite.
 

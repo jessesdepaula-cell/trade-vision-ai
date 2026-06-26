@@ -37,61 +37,115 @@ export async function evaluateOpenSignalsAgainstCandles(
     const isSell = s.direction === "VENDA_FORTE" || s.direction === "VENDA_FRACA";
     if (!isBuy && !isSell) continue;
 
-    let status: "PENDING" | "FILLED" = s.status as "PENDING" | "FILLED";
+    let status: "PENDING" | "FILLED" | "WIN" | "LOSS" = s.status as any;
     let filledAt: Date | null = s.filledAt;
     const scannedSec = Math.floor(new Date(s.scannedAt).getTime() / 1000);
-
-    const tgts = [s.target1, s.target2, s.target3].filter((x): x is number => x !== null);
-    const recIdx = (s.recommendedTarget ?? 1) - 1;
-    const targetPrice = tgts[recIdx] ?? tgts[0];
 
     const relevant = candles.filter((c) => c.t >= scannedSec);
     if (relevant.length === 0) continue;
 
+    let partialHit = s.tradeCreated || s.exitPrice !== null;
+    let partialHitAt: Date | null = s.tradeCreated ? (s.closedAt ?? s.filledAt) : null;
+
     let outcome: "WIN" | "LOSS" | null = null;
-    let exitPrice: number | null = null;
-    let closeAt: Date | null = null;
+    let exitPrice: number | null = s.exitPrice;
+    let closeAt: Date | null = s.closedAt;
+
+    const t1 = s.target1;
+    const t2 = s.target2 ?? s.target1;
+    const stop = s.stopPrice;
 
     for (const c of relevant) {
+      const candleTime = new Date(c.t * 1000);
+
+      // 1. PENDING -> FILLED
       if (status === "PENDING" && s.entryPrice !== null) {
         if (c.l <= s.entryPrice && c.h >= s.entryPrice) {
           status = "FILLED";
-          filledAt = new Date(c.t * 1000);
+          filledAt = candleTime;
         }
       }
 
-      if (status === "FILLED" && s.stopPrice !== null) {
+      // 2. FILLED -> Monitoramento de Alvos e Stop
+      if (status === "FILLED") {
         if (isBuy) {
-          if (c.l <= s.stopPrice) {
-            outcome = "LOSS";
-            exitPrice = s.stopPrice;
-            closeAt = new Date(c.t * 1000);
-            break;
-          }
-          if (targetPrice !== undefined && c.h >= targetPrice) {
-            outcome = "WIN";
-            exitPrice = targetPrice;
-            closeAt = new Date(c.t * 1000);
-            break;
+          if (!partialHit) {
+            // Ainda não bateu no Alvo 1
+            if (stop !== null && c.l <= stop) {
+              outcome = "LOSS";
+              exitPrice = stop;
+              closeAt = candleTime;
+              break;
+            }
+            if (t1 !== null && c.h >= t1) {
+              partialHit = true;
+              partialHitAt = candleTime;
+              exitPrice = t1; // Parcial garantida no Alvo 1
+              // Verifica se na mesma vela atinge o Alvo 2
+              if (t2 !== null && c.h >= t2) {
+                outcome = "WIN";
+                exitPrice = t2;
+                closeAt = candleTime;
+                break;
+              }
+            }
+          } else {
+            // Já bateu no Alvo 1 (monitora apenas Alvo 2 e Stop Loss)
+            if (t2 !== null && c.h >= t2) {
+              outcome = "WIN";
+              exitPrice = t2;
+              closeAt = candleTime;
+              break;
+            }
+            if (stop !== null && c.l <= stop) {
+              outcome = "WIN"; // Permanece WIN porque tocou Alvo 1
+              exitPrice = stop;
+              closeAt = candleTime;
+              break;
+            }
           }
         } else if (isSell) {
-          if (c.h >= s.stopPrice) {
-            outcome = "LOSS";
-            exitPrice = s.stopPrice;
-            closeAt = new Date(c.t * 1000);
-            break;
-          }
-          if (targetPrice !== undefined && c.l <= targetPrice) {
-            outcome = "WIN";
-            exitPrice = targetPrice;
-            closeAt = new Date(c.t * 1000);
-            break;
+          if (!partialHit) {
+            // Ainda não bateu no Alvo 1
+            if (stop !== null && c.h >= stop) {
+              outcome = "LOSS";
+              exitPrice = stop;
+              closeAt = candleTime;
+              break;
+            }
+            if (t1 !== null && c.l <= t1) {
+              partialHit = true;
+              partialHitAt = candleTime;
+              exitPrice = t1; // Parcial garantida no Alvo 1
+              // Verifica se na mesma vela atinge o Alvo 2
+              if (t2 !== null && c.l <= t2) {
+                outcome = "WIN";
+                exitPrice = t2;
+                closeAt = candleTime;
+                break;
+              }
+            }
+          } else {
+            // Já bateu no Alvo 1 (monitora apenas Alvo 2 e Stop Loss)
+            if (t2 !== null && c.l <= t2) {
+              outcome = "WIN";
+              exitPrice = t2;
+              closeAt = candleTime;
+              break;
+            }
+            if (stop !== null && c.h >= stop) {
+              outcome = "WIN"; // Permanece WIN porque tocou Alvo 1
+              exitPrice = stop;
+              closeAt = candleTime;
+              break;
+            }
           }
         }
       }
     }
 
-    if (status === "FILLED" && s.status === "PENDING" && !outcome) {
+    // 3. Persistência de Transição para FILLED
+    if (status === "FILLED" && s.status === "PENDING" && !partialHit) {
       await prisma.signal.update({
         where: { id: s.id },
         data: { status: "FILLED", filledAt: filledAt ?? new Date() },
@@ -99,10 +153,54 @@ export async function evaluateOpenSignalsAgainstCandles(
       filled++;
     }
 
-    if (outcome && exitPrice !== null && s.entryPrice !== null && s.stopPrice !== null) {
-      const risk = Math.abs(s.entryPrice - s.stopPrice);
+    // 4. Persistência de Parcial no Alvo 1 (se ainda não gravada)
+    if (partialHit && !s.tradeCreated) {
+      const risk = s.entryPrice !== null && s.stopPrice !== null ? Math.abs(s.entryPrice - s.stopPrice) : 0;
       let r: number | null = null;
-      if (risk > 0) {
+      if (risk > 0 && s.entryPrice !== null && t1 !== null) {
+        const reward = isBuy ? t1 - s.entryPrice : s.entryPrice - t1;
+        r = Number((reward / risk).toFixed(2));
+      }
+
+      await prisma.trade.create({
+        data: {
+          userId,
+          signalId: s.id,
+          asset: s.symbol,
+          timeframe: s.timeframe,
+          mode: s.mode,
+          direction: isBuy ? "BUY" : "SELL",
+          entryPrice: s.entryPrice ?? 0,
+          stopPrice: s.stopPrice ?? 0,
+          targetPrice: t2 ?? null,
+          exitPrice: t1,
+          outcome: "WIN",
+          rMultiple: r,
+          openedAt: filledAt ?? s.filledAt ?? s.scannedAt,
+          closedAt: partialHitAt ?? new Date(),
+          notes: `Sinal automático ${s.mode} · ${s.symbol} ${s.timeframe} (parcial garantida no Alvo 1)`,
+        },
+      });
+
+      await prisma.signal.update({
+        where: { id: s.id },
+        data: {
+          tradeCreated: true,
+          exitPrice: t1,
+          rMultiple: r,
+          status: "FILLED",
+          filledAt: filledAt ?? s.filledAt ?? new Date(),
+        },
+      });
+
+      won++;
+    }
+
+    // 5. Persistência do Encerramento Final (tocar no Alvo 2 ou no Stop Loss)
+    if (outcome && exitPrice !== null) {
+      const risk = s.entryPrice !== null && s.stopPrice !== null ? Math.abs(s.entryPrice - s.stopPrice) : 0;
+      let r: number | null = null;
+      if (risk > 0 && s.entryPrice !== null) {
         const reward = isBuy ? exitPrice - s.entryPrice : s.entryPrice - exitPrice;
         r = Number((reward / risk).toFixed(2));
       }
@@ -115,10 +213,23 @@ export async function evaluateOpenSignalsAgainstCandles(
           closedAt: closeAt ?? new Date(),
           exitPrice,
           rMultiple: r,
+          tradeCreated: true,
         },
       });
 
-      if (!s.tradeCreated) {
+      if (s.tradeCreated) {
+        // Atualiza o trade existente no diário com o encerramento final real
+        await prisma.trade.updateMany({
+          where: { signalId: s.id },
+          data: {
+            exitPrice,
+            rMultiple: r,
+            closedAt: closeAt ?? new Date(),
+            notes: `Sinal automático ${s.mode} · ${s.symbol} ${s.timeframe} (finalizado na saída real: ${exitPrice})`,
+          },
+        });
+      } else {
+        // Caso atinja Stop direto (LOSS) sem ter batido no Alvo 1
         await prisma.trade.create({
           data: {
             userId,
@@ -127,24 +238,24 @@ export async function evaluateOpenSignalsAgainstCandles(
             timeframe: s.timeframe,
             mode: s.mode,
             direction: isBuy ? "BUY" : "SELL",
-            entryPrice: s.entryPrice,
-            stopPrice: s.stopPrice,
-            targetPrice: targetPrice ?? null,
+            entryPrice: s.entryPrice ?? 0,
+            stopPrice: s.stopPrice ?? 0,
+            targetPrice: t2 ?? null,
             exitPrice,
             outcome,
             rMultiple: r,
             openedAt: filledAt ?? s.filledAt ?? s.scannedAt,
             closedAt: closeAt ?? new Date(),
-            notes: `Sinal automático ${s.mode} · ${s.symbol} ${s.timeframe} (auto-close por velas)`,
+            notes: `Sinal automático ${s.mode} · ${s.symbol} ${s.timeframe} (finalizado com desfecho: ${outcome})`,
           },
         });
-        await prisma.signal.update({
-          where: { id: s.id },
-          data: { tradeCreated: true },
-        });
       }
-      if (outcome === "WIN") won++;
-      else lost++;
+
+      if (outcome === "WIN" && !s.tradeCreated) {
+        won++;
+      } else if (outcome === "LOSS") {
+        lost++;
+      }
     }
   }
 

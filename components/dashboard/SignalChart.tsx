@@ -153,6 +153,12 @@ export function SignalChart({
 
   const [showMA, setShowMA] = useState(defaultShowMA);
   const [showSmc, setShowSmc] = useState(defaultShowSmc);
+
+  useEffect(() => {
+    setShowMA(defaultShowMA);
+    setShowSmc(defaultShowSmc);
+  }, [defaultShowMA, defaultShowSmc]);
+
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
 
   const ma = useMemo(() => {
@@ -191,6 +197,15 @@ export function SignalChart({
       return { visible: candles.slice(start, end), visibleStart: start };
     }
   }, [candles, view.visibleCount, view.offset]);
+
+  // Mapeia um índice "full" da série para o índice "in-view", retornando null se fora.
+  const toView = useMemo(() => {
+    return (idx: number): number | null => {
+      if (idx < visibleStart) return null;
+      if (idx >= visibleStart + visible.length) return null;
+      return idx - visibleStart;
+    };
+  }, [visibleStart, visible.length]);
 
   const { yMin, yMax } = useMemo(() => {
     if (visible.length === 0) return { yMin: 0, yMax: 1 };
@@ -394,11 +409,45 @@ export function SignalChart({
     }
   }
 
-  const fillIdxFull = findFillIndex(candles, entry, isBuy);
+  const scanIdxFull = useMemo(() => {
+    if (!scannedAt) return null;
+    const scanUnix = Math.floor(new Date(scannedAt).getTime() / 1000);
+    let foundIdx = -1;
+    for (let i = 0; i < candles.length; i++) {
+      const t = candles[i].t;
+      if (t !== undefined) {
+        if (t <= scanUnix) {
+          foundIdx = i;
+        } else {
+          break;
+        }
+      }
+    }
+    return foundIdx >= 0 ? foundIdx : null;
+  }, [candles, scannedAt]);
+
+  const scanIdxInView = scanIdxFull !== null ? toView(scanIdxFull) : null;
+
+  const xLineStart = useMemo(() => {
+    if (scanIdxFull === null) return padL;
+    if (scanIdxFull < visibleStart) return padL;
+    if (scanIdxFull >= visibleStart + visible.length) return W - padR;
+    return xOf(scanIdxFull - visibleStart);
+  }, [scanIdxFull, visibleStart, visible.length, xOf]);
+
+  const fillIdxFull = findFillIndex(candles, entry, isBuy, scanIdxFull);
   const closeIdxFull =
     fillIdxFull !== null && (status === "WIN" || status === "LOSS")
       ? findCloseIndex(candles, isBuy, stop, target, fillIdxFull)
       : null;
+
+  const xLineEnd = useMemo(() => {
+    if (closeIdxFull === null) return W - padR;
+    if (closeIdxFull < visibleStart) return padL;
+    if (closeIdxFull >= visibleStart + visible.length) return W - padR;
+    return xOf(closeIdxFull - visibleStart);
+  }, [closeIdxFull, visibleStart, visible.length, xOf]);
+
   const fillIdxInView =
     fillIdxFull !== null && fillIdxFull >= visibleStart && fillIdxFull < visibleStart + visible.length
       ? fillIdxFull - visibleStart
@@ -422,13 +471,6 @@ export function SignalChart({
     if (zone === "xScale") return "ew-resize";
     return "grab";
   })();
-
-  // Mapeia um índice "full" da série para o índice "in-view", retornando null se fora.
-  function toView(idx: number): number | null {
-    if (idx < visibleStart) return null;
-    if (idx >= visibleStart + visible.length) return null;
-    return idx - visibleStart;
-  }
 
   return (
     <div className="relative overflow-hidden rounded-lg border border-white/10 bg-white/[0.015]">
@@ -740,11 +782,65 @@ export function SignalChart({
           </g>
         )}
 
+        {/* Linha vertical do momento da detecção do sinal */}
+        {scanIdxInView !== null && (
+          <g pointerEvents="none">
+            <line
+              x1={xOf(scanIdxInView)}
+              y1={padT}
+              x2={xOf(scanIdxInView)}
+              y2={H - padB}
+              stroke="rgba(255, 255, 255, 0.2)"
+              strokeWidth="1"
+              strokeDasharray="3 3"
+            />
+            <rect
+              x={xOf(scanIdxInView) - 27}
+              y={H - padB - 18}
+              width="54"
+              height="14"
+              rx="3"
+              fill="rgba(255, 255, 255, 0.15)"
+              stroke="rgba(255, 255, 255, 0.25)"
+              strokeWidth="0.5"
+            />
+            <text
+              x={xOf(scanIdxInView)}
+              y={H - padB - 8}
+              fontSize="7"
+              fontWeight="700"
+              textAnchor="middle"
+              fill="rgba(255, 255, 255, 0.85)"
+              fontFamily="JetBrains Mono, monospace"
+            >
+              DETECÇÃO
+            </text>
+          </g>
+        )}
+
         {entry !== null && (
-          <PriceLine y={yOf(entry)} price={entry} label="ENTRADA" color="#10B981" dec={dec} solid />
+          <PriceLine
+            y={yOf(entry)}
+            price={entry}
+            label="ENTRADA"
+            color="#10B981"
+            dec={dec}
+            solid
+            x1={padL}
+            x2={W - padR}
+          />
         )}
         {stop !== null && (
-          <PriceLine y={yOf(stop)} price={stop} label="STOP" color="#F43F5E" dec={dec} solid />
+          <PriceLine
+            y={yOf(stop)}
+            price={stop}
+            label="STOP"
+            color="#F43F5E"
+            dec={dec}
+            solid
+            x1={padL}
+            x2={W - padR}
+          />
         )}
         {targets && targets.length > 0
           ? targets.map((tv, i) => {
@@ -759,6 +855,8 @@ export function SignalChart({
                   color={isRec ? "#10B981" : "#F59E0B"}
                   dec={dec}
                   solid={false}
+                  x1={padL}
+                  x2={W - padR}
                 />
               );
             })
@@ -770,6 +868,8 @@ export function SignalChart({
                 color="#10B981"
                 dec={dec}
                 solid={false}
+                x1={padL}
+                x2={W - padR}
               />
             )}
 
@@ -782,6 +882,8 @@ export function SignalChart({
             dec={dec}
             solid
             thick
+            x1={padL}
+            x2={W - padR}
           />
         )}
 
@@ -1029,6 +1131,8 @@ function PriceLine({
   dec,
   solid,
   thick,
+  x1,
+  x2,
 }: {
   y: number;
   price: number;
@@ -1037,13 +1141,15 @@ function PriceLine({
   dec: number;
   solid: boolean;
   thick?: boolean;
+  x1: number;
+  x2: number;
 }) {
   return (
     <g pointerEvents="none">
       <line
-        x1={padL}
+        x1={x1}
         y1={y}
-        x2={W - padR}
+        x2={x2}
         y2={y}
         stroke={color}
         strokeWidth={thick ? "1.5" : "1"}
@@ -1062,7 +1168,7 @@ function PriceLine({
         {label}
       </text>
       <text
-        x={padL + 6}
+        x={x1 + 6}
         y={y - 3}
         fontSize="9"
         fill={color}
@@ -1078,9 +1184,11 @@ function findFillIndex(
   candles: ChartCandle[],
   entry: number | null,
   isBuy: boolean,
+  scanIdx: number | null
 ): number | null {
   if (entry === null) return null;
-  for (let i = 0; i < candles.length; i++) {
+  const start = scanIdx !== null ? scanIdx : 0;
+  for (let i = start; i < candles.length; i++) {
     const c = candles[i];
     if (c.l <= entry && c.h >= entry) return i;
   }

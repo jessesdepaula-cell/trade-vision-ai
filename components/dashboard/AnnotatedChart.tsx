@@ -149,6 +149,7 @@ export function AnnotatedChart({
                   "absolute -translate-y-1/2 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wide shadow-md",
                   colors.bg,
                   colors.text,
+                  i % 2 === 0 ? "left-2" : "right-2"
                 )}
                 // alterna lado para não sobrepor: pares à direita, ímpares à esquerda
               >

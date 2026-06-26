@@ -1,56 +1,63 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
-  if (process.env.STRIPE_MOCK === "true") {
+  const isMock = process.env.ASAAS_MOCK === "true" || !process.env.ASAAS_API_KEY;
+  if (isMock) {
     return NextResponse.json({ ok: true, mock: true });
   }
 
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-  const sig = req.headers.get("stripe-signature");
-  const body = await req.text();
-
-  let event: Stripe.Event;
-  try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      sig!,
-      process.env.STRIPE_WEBHOOK_SECRET!,
-    );
-  } catch (err) {
-    return NextResponse.json(
-      { error: `Webhook signature error: ${(err as Error).message}` },
-      { status: 400 },
-    );
+  const token = req.headers.get("asaas-access-token");
+  const expectedToken = process.env.ASAAS_WEBHOOK_SECRET;
+  if (expectedToken && token !== expectedToken) {
+    return NextResponse.json({ error: "Token inválido" }, { status: 401 });
   }
 
-  switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const userId = session.metadata?.userId;
-      if (userId) {
-        await prisma.user.update({
-          where: { id: userId },
-          data: {
-            subscriptionStatus: "active",
-            stripeCustomerId: session.customer as string,
-            stripeSubId: session.subscription as string,
-          },
-        });
+  let body;
+  try {
+    body = await req.json();
+  } catch (err) {
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+
+  const { event, payment, subscription } = body;
+
+  switch (event) {
+    case "PAYMENT_CONFIRMED":
+    case "PAYMENT_RECEIVED": {
+      if (payment) {
+        const customerId = payment.customer;
+        const subId = payment.subscription;
+        if (customerId) {
+          await prisma.user.updateMany({
+            where: { stripeCustomerId: customerId },
+            data: {
+              subscriptionStatus: "active",
+              stripeSubId: subId ?? null,
+              currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 dias de ciclo
+            },
+          });
+        }
       }
       break;
     }
-    case "customer.subscription.updated":
-    case "customer.subscription.deleted": {
-      const sub = event.data.object as Stripe.Subscription;
-      await prisma.user.updateMany({
-        where: { stripeSubId: sub.id },
-        data: {
-          subscriptionStatus: sub.status,
-          currentPeriodEnd: new Date(sub.current_period_end * 1000),
-        },
-      });
+    case "SUBSCRIPTION_DELETED":
+    case "SUBSCRIPTION_DISABLED": {
+      if (subscription) {
+        const subId = subscription.id;
+        const customerId = subscription.customer;
+        await prisma.user.updateMany({
+          where: {
+            OR: [
+              { stripeSubId: subId },
+              { stripeCustomerId: customerId }
+            ]
+          },
+          data: {
+            subscriptionStatus: "canceled",
+          },
+        });
+      }
       break;
     }
   }

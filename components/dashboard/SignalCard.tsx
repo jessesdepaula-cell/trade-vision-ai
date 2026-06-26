@@ -49,6 +49,40 @@ function ActiveCard({ signal: s, defaultExpanded }: { signal: SignalData; defaul
   const statusMeta = statusBadge(s.status);
   const target = pickTarget(s);
 
+  // Estado local de velas para suportar atualização em tempo real
+  const [candles, setCandles] = useState<ChartCandle[] | null>(s.candleData);
+
+  useEffect(() => {
+    // Apenas faz o fetch de velas novas para sinais ativos (PENDING / FILLED)
+    if (s.status !== "PENDING" && s.status !== "FILLED") return;
+
+    let active = true;
+    async function loadRealtimeCandles() {
+      try {
+        const r = await fetch(
+          `/api/market/candles?symbol=${encodeURIComponent(s.symbol)}&tf=${s.timeframe}&limit=500`
+        );
+        if (!r.ok) return;
+        const data = await r.json();
+        if (active && Array.isArray(data.candles)) {
+          setCandles(data.candles);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar candles atualizados:", err);
+      }
+    }
+
+    loadRealtimeCandles();
+    
+    // Atualiza a cada 30 segundos
+    const interval = setInterval(loadRealtimeCandles, 30000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [s.symbol, s.timeframe, s.status]);
+
   // Default: expandido para sinais ativos (PENDING/FILLED), colapsado para fechados.
   // Persistimos a escolha do usuário em localStorage por par|tf|modo para que o
   // auto-refresh (router.refresh a cada 30s) e novos sinais entrando no mesmo
@@ -139,14 +173,14 @@ function ActiveCard({ signal: s, defaultExpanded }: { signal: SignalData; defaul
           </span>
         </div>
       </button>
-
+ 
       {!expanded && null}
-
+ 
       {/* Gráfico de candles ao topo */}
-      {expanded && s.candleData && s.candleData.length > 0 && (
+      {expanded && candles && candles.length > 0 && (
         <div className="border-b border-white/5 p-4">
           <SignalChart
-            candles={s.candleData}
+            candles={candles}
             symbol={s.symbol}
             isBuy={!!isBuy}
             entry={s.entryPrice}
@@ -159,6 +193,8 @@ function ActiveCard({ signal: s, defaultExpanded }: { signal: SignalData; defaul
             rMultiple={s.rMultiple}
             scannedAt={s.scannedAt}
             timeframe={s.timeframe}
+            defaultShowMA={s.mode === "CLASSICO"}
+            defaultShowSmc={s.mode === "SMC"}
           />
         </div>
       )}
@@ -312,15 +348,46 @@ function PriceBox({
 }
 
 function NoSetupRow({ signal: s }: { signal: SignalData }) {
-  const hasChart = !!s.candleData && s.candleData.length > 0;
-  const storageKey = `tv:expanded:${s.symbol}|${s.timeframe}|${s.mode}`;
   const [expanded, setExpanded] = useState(false);
+  const [candles, setCandles] = useState<ChartCandle[] | null>(s.candleData);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const storageKey = `tv:expanded:${s.symbol}|${s.timeframe}|${s.mode}`;
+
+  async function fetchCandles() {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch(
+        `/api/market/candles?symbol=${encodeURIComponent(s.symbol)}&tf=${s.timeframe}&limit=300`
+      );
+      if (!r.ok) throw new Error("Erro ao carregar dados do mercado");
+      const data = await r.json();
+      if (Array.isArray(data.candles)) {
+        setCandles(data.candles);
+      } else {
+        throw new Error("Formato de velas inválido");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro desconhecido");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const saved = window.localStorage.getItem(storageKey);
-    if (saved === "1") setExpanded(true);
-    else if (saved === "0") setExpanded(false);
+    if (saved === "1") {
+      setExpanded(true);
+      if (!candles || candles.length === 0) {
+        fetchCandles();
+      }
+    } else if (saved === "0") {
+      setExpanded(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
   function toggleExpanded() {
@@ -329,6 +396,9 @@ function NoSetupRow({ signal: s }: { signal: SignalData }) {
       try {
         window.localStorage.setItem(storageKey, next ? "1" : "0");
       } catch {}
+      if (next && (!candles || candles.length === 0)) {
+        fetchCandles();
+      }
       return next;
     });
   }
@@ -337,22 +407,14 @@ function NoSetupRow({ signal: s }: { signal: SignalData }) {
     <div className="overflow-hidden rounded-md border border-white/5 bg-white/[0.015]">
       <button
         type="button"
-        onClick={() => hasChart && toggleExpanded()}
-        disabled={!hasChart}
-        className={cn(
-          "flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-xs",
-          hasChart ? "hover:bg-white/[0.02]" : "cursor-default",
-        )}
+        onClick={toggleExpanded}
+        className="flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-xs hover:bg-white/[0.02]"
       >
         <div className="flex items-center gap-2">
-          {hasChart ? (
-            expanded ? (
-              <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5 text-zinc-500" />
-            )
+          {expanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
           ) : (
-            <span className="h-3.5 w-3.5" />
+            <ChevronRight className="h-3.5 w-3.5 text-zinc-500" />
           )}
           <span className="num text-sm text-zinc-300">{s.symbol}</span>
           <span className="num text-[10px] text-zinc-500">· {s.timeframe}</span>
@@ -364,7 +426,7 @@ function NoSetupRow({ signal: s }: { signal: SignalData }) {
                 : "border-amber-500/20 bg-amber-500/[0.04] text-amber-400/80",
             )}
           >
-            {s.mode}
+            {s.mode === "SMC" ? "SMC" : "Clássico"}
           </span>
           <span className="text-zinc-500">
             {s.id.startsWith("mock-") ? "aguardando escaneamento" : "sem setup"}
@@ -373,23 +435,38 @@ function NoSetupRow({ signal: s }: { signal: SignalData }) {
         <span className="num text-[10px] text-zinc-500">{timeAgo(s.scannedAt)}</span>
       </button>
 
-      {expanded && hasChart && (
+      {expanded && (
         <div className="border-t border-white/5 p-4">
-          <SignalChart
-            candles={s.candleData!}
-            symbol={s.symbol}
-            isBuy={false}
-            entry={null}
-            stop={null}
-            target={null}
-            targets={[null, null, null]}
-            recommendedTarget={null}
-            status={s.status}
-            exitPrice={null}
-            rMultiple={null}
-            scannedAt={s.scannedAt}
-            timeframe={s.timeframe}
-          />
+          {loading && (
+            <div className="flex h-[150px] items-center justify-center text-xs text-zinc-500">
+              <span className="mr-2 h-4 w-4 animate-spin rounded-full border border-zinc-500 border-t-transparent" />
+              Carregando gráfico do mercado...
+            </div>
+          )}
+          {error && (
+            <div className="flex h-[150px] items-center justify-center text-xs text-rose-400">
+              ⚠️ {error}
+            </div>
+          )}
+          {!loading && !error && candles && candles.length > 0 && (
+            <SignalChart
+              candles={candles}
+              symbol={s.symbol}
+              isBuy={false}
+              entry={null}
+              stop={null}
+              target={null}
+              targets={[null, null, null]}
+              recommendedTarget={null}
+              status={s.status}
+              exitPrice={null}
+              rMultiple={null}
+              scannedAt={s.scannedAt}
+              timeframe={s.timeframe}
+              defaultShowMA={s.mode === "CLASSICO"}
+              defaultShowSmc={s.mode === "SMC"}
+            />
+          )}
           {s.justification && (
             <p className="mt-3 text-xs leading-relaxed text-zinc-400">
               {s.justification}

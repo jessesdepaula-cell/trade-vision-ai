@@ -1,33 +1,62 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
 import { getOrCreateUser } from "@/lib/subscription";
 import { prisma } from "@/lib/prisma";
+import { createAsaasCustomer, createAsaasSubscriptionCheckout } from "@/lib/asaas";
 
 export async function POST(req: Request) {
   const user = await getOrCreateUser();
   if (!user) return NextResponse.redirect(new URL("/sign-in", req.url));
 
-  if (process.env.STRIPE_MOCK === "true") {
+  const isMock = process.env.ASAAS_MOCK === "true" || !process.env.ASAAS_API_KEY;
+
+  if (isMock) {
     await prisma.user.update({
       where: { id: user.id },
-      data: { subscriptionStatus: "active" },
+      data: { 
+        subscriptionStatus: "active",
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 dias
+      },
     });
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    return NextResponse.redirect(new URL("/dashboard?checkout=success", req.url));
   }
 
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+  try {
+    // Reutiliza a coluna stripeCustomerId para armazenar o ID do cliente no Asaas
+    let asaasCustomerId = user.stripeCustomerId;
+    if (!asaasCustomerId) {
+      asaasCustomerId = await createAsaasCustomer({
+        name: user.name ?? "Cliente Trade Vision",
+        email: user.email,
+      });
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { stripeCustomerId: asaasCustomerId },
+      });
+    }
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    customer_email: user.email,
-    line_items: [
-      { price: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID!, quantity: 1 },
-    ],
-    client_reference_id: user.id,
-    success_url: `${new URL(req.url).origin}/dashboard?checkout=success`,
-    cancel_url: `${new URL(req.url).origin}/billing?checkout=cancel`,
-    metadata: { userId: user.id, clerkId: user.clerkId },
-  });
+    // Calcula o vencimento da primeira parcela
+    // Se o trial de 3 dias ainda estiver ativo, cobra quando ele expirar.
+    // Caso contrário, cobra amanhã.
+    let trialDate = user.currentPeriodEnd;
+    if (!trialDate || trialDate < new Date()) {
+      trialDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    }
+    const nextDueDate = trialDate.toISOString().split("T")[0];
 
-  return NextResponse.redirect(session.url!, { status: 303 });
+    const checkoutUrl = await createAsaasSubscriptionCheckout({
+      customerId: asaasCustomerId,
+      value: 47.90,
+      cycle: "MONTHLY",
+      nextDueDate,
+      successUrl: `${new URL(req.url).origin}/dashboard?checkout=success`,
+      cancelUrl: `${new URL(req.url).origin}/billing?checkout=cancel`,
+    });
+
+    return NextResponse.redirect(checkoutUrl, { status: 303 });
+  } catch (err) {
+    console.error("Erro no checkout Asaas:", err);
+    return NextResponse.redirect(
+      new URL(`/billing?error=${encodeURIComponent(err instanceof Error ? err.message : "Erro no checkout")}`, req.url)
+    );
+  }
 }

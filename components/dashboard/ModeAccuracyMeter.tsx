@@ -105,6 +105,25 @@ function AccuracyCard({
         </div>
       </div>
 
+      {stats.symbols && stats.symbols.length > 0 && (
+        <div className="mt-4 border-t border-white/5 pt-3">
+          <p className="text-[9px] uppercase tracking-widest text-zinc-500 mb-1.5 font-medium">
+            Ativos operados ({stats.symbols.length})
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {stats.symbols.map((item) => (
+              <span
+                key={item.symbol}
+                className="num inline-flex items-center gap-1 rounded bg-white/[0.03] border border-white/5 px-2 py-0.5 text-[10px] text-zinc-300 font-medium"
+              >
+                <span>{item.symbol}</span>
+                <span className="text-zinc-500 text-[9px]">({item.count})</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <p className="mt-3 text-[10px] text-zinc-500">{cls.hint}</p>
     </div>
   );

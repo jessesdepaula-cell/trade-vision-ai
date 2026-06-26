@@ -27,7 +27,7 @@ export async function twelveCandles(
   )}&interval=${TF_TO_TWELVE[tf]}&outputsize=${Math.min(
     outputsize,
     5000,
-  )}&apikey=${key()}&format=JSON&order=ASC`;
+  )}&apikey=${key()}&format=JSON&order=ASC&timezone=UTC`;
   const res = await fetch(url, { next: { revalidate: 0 } });
   if (!res.ok) throw new Error(`Twelve Data candles ${res.status}`);
   const j = (await res.json()) as

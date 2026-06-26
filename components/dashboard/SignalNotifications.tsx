@@ -100,9 +100,30 @@ export function SignalNotifications({ signals }: { signals: SignalLite[] }) {
   }
 
   async function requestPerm() {
-    if (typeof window === "undefined" || !("Notification" in window)) return;
-    const p = await Notification.requestPermission();
-    setPerm(p as NotificationPerm);
+    if (typeof window === "undefined") return;
+    if (!("Notification" in window)) {
+      alert("Notificações não são suportadas neste navegador.");
+      return;
+    }
+    try {
+      const p = await new Promise<string>((resolve) => {
+        const res = Notification.requestPermission(resolve);
+        if (res && typeof res.then === "function") {
+          res.then(resolve);
+        }
+      });
+      setPerm(p as NotificationPerm);
+      if (p === "denied") {
+        alert("As notificações foram bloqueadas no navegador. Para ativá-las, clique no ícone de configurações/cadeado na barra de endereços do seu navegador e ative a permissão de Notificações.");
+      }
+    } catch (e) {
+      Notification.requestPermission((p) => {
+        setPerm(p as NotificationPerm);
+        if (p === "denied") {
+          alert("As notificações foram bloqueadas no navegador. Ative-as nas configurações do site na barra de endereços.");
+        }
+      });
+    }
   }
 
   function toggleEnabled() {

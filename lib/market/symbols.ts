@@ -14,6 +14,13 @@ export const SUPPORTED_SYMBOLS: SymbolSpec[] = [
     label: "Bitcoin",
     assetClass: "crypto",
     binance: "BTCUSDT",
+    twelvedata: "BTC/USD",
+  },
+  {
+    symbol: "XAUUSD",
+    label: "Ouro / Dólar",
+    assetClass: "forex",
+    twelvedata: "XAU/USD",
   },
   {
     symbol: "EURUSD",

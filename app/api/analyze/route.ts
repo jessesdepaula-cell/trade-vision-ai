@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
 import { requireActiveSubscription } from "@/lib/subscription";
 import { prisma } from "@/lib/prisma";
 import { smcSystemPrompt } from "@/lib/smcManual";
 import { classicoSystemPrompt } from "@/lib/classicoManual";
+import { getAIClient } from "@/lib/ai";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -121,15 +121,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Modo inválido" }, { status: 400 });
   }
 
-  if (!process.env.OPENAI_API_KEY) {
+  if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
     return NextResponse.json(
-      { error: "OPENAI_API_KEY não configurada" },
+      { error: "Chave de API (OPENAI_API_KEY ou GEMINI_API_KEY) não configurada" },
       { status: 500 },
     );
   }
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const model = process.env.OPENAI_MODEL ?? "gpt-4o";
+  const { openai, model } = getAIClient();
 
   const imageUrl = image.startsWith("data:")
     ? image

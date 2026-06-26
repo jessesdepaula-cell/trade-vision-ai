@@ -24,7 +24,8 @@ export async function getOrCreateUser() {
       clerkId: userId,
       email,
       name: [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" "),
-      subscriptionStatus: process.env.STRIPE_MOCK === "true" ? "active" : "inactive",
+      subscriptionStatus: "trialing",
+      currentPeriodEnd: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 dias grátis
     },
     update: { email },
   });
@@ -36,7 +37,17 @@ export async function requireActiveSubscription() {
   const user = await getOrCreateUser();
   if (!user) return { ok: false as const, reason: "unauthenticated" as const };
 
-  const status = user.subscriptionStatus as SubscriptionStatus;
+  let status = user.subscriptionStatus as SubscriptionStatus;
+
+  // Se o trial expirou, atualiza para inativo no banco
+  if (status === "trialing" && user.currentPeriodEnd && user.currentPeriodEnd < new Date()) {
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { subscriptionStatus: "inactive" },
+    });
+    return { ok: false as const, reason: "inactive" as const, user: updated };
+  }
+
   const active = status === "active" || status === "trialing";
   if (!active) return { ok: false as const, reason: "inactive" as const, user };
 

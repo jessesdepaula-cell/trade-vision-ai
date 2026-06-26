@@ -11,6 +11,7 @@ export type ModeStats = {
   rTotal: number;
   avgR: number;
   expectancy: number;
+  symbols: { symbol: string; count: number }[];
 };
 
 const EMPTY: Omit<ModeStats, "mode"> = {
@@ -23,6 +24,7 @@ const EMPTY: Omit<ModeStats, "mode"> = {
   rTotal: 0,
   avgR: 0,
   expectancy: 0,
+  symbols: [],
 };
 
 export async function getModeStats(
@@ -30,7 +32,7 @@ export async function getModeStats(
 ): Promise<{ smc: ModeStats; classico: ModeStats }> {
   const signals = await prisma.signal.findMany({
     where: { userId, hasSetup: true },
-    select: { mode: true, status: true, rMultiple: true },
+    select: { mode: true, status: true, rMultiple: true, symbol: true },
   });
 
   function statusToOutcome(s: string): "WIN" | "LOSS" | "BREAKEVEN" | "OPEN" {
@@ -43,7 +45,7 @@ export async function getModeStats(
   function calc(mode: "SMC" | "CLASSICO"): ModeStats {
     const subset = signals
       .filter((s) => s.mode === mode)
-      .map((s) => ({ outcome: statusToOutcome(s.status), rMultiple: s.rMultiple }));
+      .map((s) => ({ symbol: s.symbol, outcome: statusToOutcome(s.status), rMultiple: s.rMultiple }));
     const wins = subset.filter((t) => t.outcome === "WIN").length;
     const losses = subset.filter((t) => t.outcome === "LOSS").length;
     const breakeven = subset.filter((t) => t.outcome === "BREAKEVEN").length;
@@ -65,7 +67,17 @@ export async function getModeStats(
     const winP = denom > 0 ? wins / denom : 0;
     const lossP = denom > 0 ? losses / denom : 0;
     const expectancy = winP * avgWin - lossP * avgLoss;
-    return { mode, total, wins, losses, breakeven, open, winRate, rTotal, avgR, expectancy };
+
+    // Agrupa e conta os trades fechados por símbolo/ativo
+    const symbolCounts: Record<string, number> = {};
+    for (const t of closed) {
+      symbolCounts[t.symbol] = (symbolCounts[t.symbol] || 0) + 1;
+    }
+    const symbolsList = Object.entries(symbolCounts)
+      .map(([symbol, count]) => ({ symbol, count }))
+      .sort((a, b) => b.count - a.count);
+
+    return { mode, total, wins, losses, breakeven, open, winRate, rTotal, avgR, expectancy, symbols: symbolsList };
   }
 
   return {

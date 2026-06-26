@@ -1,6 +1,6 @@
-import OpenAI from "openai";
 import { smcSystemPrompt } from "./smcManual";
 import { classicoSystemPrompt } from "./classicoManual";
+import { getAIClient } from "./ai";
 
 export type Candle = { t: number; o: number; h: number; l: number; c: number; v?: number };
 
@@ -140,36 +140,61 @@ export async function scanWithAI(input: {
   candles: Candle[];
   htfCandles?: Candle[];
 }): Promise<ScanResult> {
-  if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY ausente");
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const model = pickModel(input.mode);
+  if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
+    throw new Error("Chave de API (OPENAI_API_KEY ou GEMINI_API_KEY) ausente");
+  }
+  const { openai, model: defaultModel, isGemini } = getAIClient();
+  const model = isGemini ? defaultModel : pickModel(input.mode);
+
+  // Reduzir tamanho dos dados enviados para a IA para evitar estourar limites de tokens (TPM)
+  const slicedCandles = input.candles.slice(-120);
+  const slicedHtfCandles = input.htfCandles ? input.htfCandles.slice(-60) : [];
 
   const htfTf = htfFor(input.timeframe);
   const htfSection =
-    input.htfCandles && input.htfCandles.length > 0
-      ? `\n\nCONTEXTO HTF (timeframe superior ${htfTf}, ${input.htfCandles.length} velas — use para validar o viés macro):
-${candlesCompact(input.htfCandles)}`
+    slicedHtfCandles.length > 0
+      ? `\n\nCONTEXTO HTF (timeframe superior ${htfTf}, ${slicedHtfCandles.length} velas — use para validar o viés macro):
+${candlesCompact(slicedHtfCandles)}`
       : "";
 
   const userText = `Símbolo: ${input.symbol}
 Timeframe principal (LTF): ${input.timeframe}
-Últimas ${input.candles.length} velas LTF (mais recentes ao final):
-${candlesToText(input.candles)}${htfSection}
+Últimas ${slicedCandles.length} velas LTF (mais recentes ao final):
+${candlesToText(slicedCandles)}${htfSection}
 
 Há um SETUP CLARO operacional AGORA? Use o contexto HTF para validar o viés. Retorne o JSON conforme especificado.`;
 
-  const completion = await openai.chat.completions.create({
-    model,
-    temperature: 0.1,
-    max_tokens: 1200,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: systemPrompt(input.mode) },
-      { role: "user", content: userText },
-    ],
-  });
+  let completion;
+  let attempts = 0;
+  while (attempts < 3) {
+    try {
+      completion = await openai.chat.completions.create({
+        model,
+        temperature: 0.1,
+        max_tokens: 1200,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt(input.mode) },
+          { role: "user", content: userText },
+        ],
+      });
+      break;
+    } catch (e) {
+      attempts++;
+      const errMessage = e instanceof Error ? e.message : String(e);
+      if (attempts >= 3) {
+        throw new Error(`[IA Scan] Limite de tentativas excedido. Erro original: ${errMessage}`);
+      }
+      if (errMessage.includes("429") || errMessage.includes("Rate limit") || errMessage.includes("rate_limit")) {
+        console.warn(`[IA Scan] Limite de taxa da OpenAI atingido. Aguardando 10s para tentar novamente (tentativa ${attempts}/3)...`);
+        await new Promise((resolve) => setTimeout(resolve, 10000));
+      } else {
+        throw e;
+      }
+    }
+  }
 
-  const raw = completion.choices[0]?.message?.content ?? "{}";
+  const raw = completion?.choices[0]?.message?.content ?? "{}";
   try {
     const parsed = JSON.parse(raw);
     return parsed as ScanResult;
