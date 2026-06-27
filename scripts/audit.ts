@@ -1,6 +1,10 @@
 import { loadEnvConfig } from "@next/env";
 loadEnvConfig(process.cwd());
 
+if (process.env.DIRECT_URL) {
+  process.env.DATABASE_URL = process.env.DIRECT_URL;
+}
+
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
