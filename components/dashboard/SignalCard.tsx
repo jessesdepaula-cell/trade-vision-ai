@@ -355,8 +355,8 @@ function NoSetupRow({ signal: s }: { signal: SignalData }) {
 
   const storageKey = `tv:expanded:${s.symbol}|${s.timeframe}|${s.mode}`;
 
-  async function fetchCandles() {
-    setLoading(true);
+  async function fetchCandles(showLoading = true) {
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const r = await fetch(
@@ -370,9 +370,9 @@ function NoSetupRow({ signal: s }: { signal: SignalData }) {
         throw new Error("Formato de velas inválido");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro desconhecido");
+      if (showLoading) setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }
 
@@ -381,14 +381,44 @@ function NoSetupRow({ signal: s }: { signal: SignalData }) {
     const saved = window.localStorage.getItem(storageKey);
     if (saved === "1") {
       setExpanded(true);
-      if (!candles || candles.length === 0) {
-        fetchCandles();
-      }
     } else if (saved === "0") {
       setExpanded(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
+
+  useEffect(() => {
+    if (!expanded) return;
+
+    if (!candles || candles.length === 0) {
+      fetchCandles(true);
+    } else {
+      fetchCandles(false);
+    }
+
+    let active = true;
+    async function loadRealtimeCandles() {
+      try {
+        const r = await fetch(
+          `/api/market/candles?symbol=${encodeURIComponent(s.symbol)}&tf=${s.timeframe}&limit=300`
+        );
+        if (!r.ok) return;
+        const data = await r.json();
+        if (active && Array.isArray(data.candles)) {
+          setCandles(data.candles);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar candles atualizados:", err);
+      }
+    }
+
+    const interval = setInterval(loadRealtimeCandles, 60000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.symbol, s.timeframe, expanded]);
 
   function toggleExpanded() {
     setExpanded((v) => {
@@ -396,9 +426,6 @@ function NoSetupRow({ signal: s }: { signal: SignalData }) {
       try {
         window.localStorage.setItem(storageKey, next ? "1" : "0");
       } catch {}
-      if (next && (!candles || candles.length === 0)) {
-        fetchCandles();
-      }
       return next;
     });
   }
