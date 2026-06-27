@@ -82,7 +82,7 @@ async function runAudit() {
         const res = await fetch(url);
         if (res.ok) {
           const html = await res.text();
-          if (html.includes("Trade Vision") && html.includes("Análise institucional")) {
+          if (html.includes("Trade Vision") && (html.includes("Instituições") || html.includes("Smart Money"))) {
             console.log(`   └─ ${url} - ONLINE e CORRETO (OK)`);
           } else {
             console.log(`   └─ ${url} - ONLINE mas CONTEÚDO INCORRETO/ANTIGO (FALHA)`);
