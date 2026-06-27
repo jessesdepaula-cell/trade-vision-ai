@@ -818,12 +818,18 @@ export function SignalChart({
           </g>
         )}
 
+        {/* Premium/Discount Background Shading */}
+        <rect x={padL} y={16} width={innerW} height={158} fill="rgba(244,63,94,0.015)" pointerEvents="none" />
+        <rect x={padL} y={174} width={innerW} height={158} fill="rgba(16,185,129,0.015)" pointerEvents="none" />
+        <line x1={padL} y1={174} x2={W - padR} y2={174} stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="5 5" pointerEvents="none" />
+        <text x={padL + 6} y={171} fontSize="7" fill="rgba(255,255,255,0.25)" fontFamily="JetBrains Mono, monospace" pointerEvents="none">FIB 50% (PREMIUM / DISCOUNT)</text>
+
         {entry !== null && (
           <PriceLine
             y={yOf(entry)}
             price={entry}
-            label="ENTRADA"
-            color="#10B981"
+            label="E"
+            color="#8B5CF6"
             dec={dec}
             solid
             x1={padL}
@@ -834,8 +840,8 @@ export function SignalChart({
           <PriceLine
             y={yOf(stop)}
             price={stop}
-            label="STOP"
-            color="#F43F5E"
+            label="SL"
+            color="#EF4444"
             dec={dec}
             solid
             x1={padL}
@@ -846,17 +852,31 @@ export function SignalChart({
           ? targets.map((tv, i) => {
               if (typeof tv !== "number") return null;
               const isRec = (recommendedTarget ?? 1) === i + 1;
+              const colors = ["#34D399", "#10B981", "#047857"];
+              const color = colors[i] ?? "#10B981";
+
+              let pipsText = "";
+              let pctText = "";
+              if (entry !== null) {
+                const diff = Math.abs(tv - entry);
+                pipsText = `${calcPips(diff, symbol)}`;
+                const pct = (diff / entry) * 100;
+                pctText = `+${pct.toFixed(1)}%`;
+              }
+
               return (
                 <PriceLine
                   key={i}
                   y={yOf(tv)}
                   price={tv}
-                  label={`ALVO ${i + 1}${isRec ? " ★" : ""}`}
-                  color={isRec ? "#10B981" : "#F59E0B"}
+                  label={`TP${i + 1}${isRec ? " ★" : ""}`}
+                  color={color}
                   dec={dec}
                   solid={false}
                   x1={padL}
                   x2={W - padR}
+                  pipsText={pipsText}
+                  pctText={pctText}
                 />
               );
             })
@@ -864,12 +884,14 @@ export function SignalChart({
               <PriceLine
                 y={yOf(target)}
                 price={target}
-                label="ALVO ★"
+                label="TP"
                 color="#10B981"
                 dec={dec}
                 solid={false}
                 x1={padL}
                 x2={W - padR}
+                pipsText={entry !== null ? `${calcPips(Math.abs(target - entry), symbol)}` : undefined}
+                pctText={entry !== null ? `+${((Math.abs(target - entry) / entry) * 100).toFixed(1)}%` : undefined}
               />
             )}
 
@@ -1123,6 +1145,20 @@ function buildMaPath(
   return path.trim();
 }
 
+function calcPips(diff: number, symbol: string): string {
+  const s = symbol.toUpperCase();
+  if (s.includes("BTC") || s.includes("ETH") || s.includes("SOL") || s.includes("XRP") || s.includes("BNB") || s.includes("ADA")) {
+    return `$${diff.toFixed(2)}`;
+  }
+  if (s.includes("XAU") || s.includes("GOLD")) {
+    return `${(diff * 10).toFixed(1)} pips`;
+  }
+  if (s.includes("JPY")) {
+    return `${(diff * 100).toFixed(1)} pips`;
+  }
+  return `${(diff * 10000).toFixed(1)} pips`;
+}
+
 function PriceLine({
   y,
   price,
@@ -1133,6 +1169,8 @@ function PriceLine({
   thick,
   x1,
   x2,
+  pipsText,
+  pctText,
 }: {
   y: number;
   price: number;
@@ -1143,6 +1181,8 @@ function PriceLine({
   thick?: boolean;
   x1: number;
   x2: number;
+  pipsText?: string;
+  pctText?: string;
 }) {
   return (
     <g pointerEvents="none">
@@ -1158,7 +1198,7 @@ function PriceLine({
       />
       <rect x={W - padR + 4} y={y - 8} width="72" height="16" rx="3" fill={color} opacity="0.92" />
       <text
-        x={W - padR + 22}
+        x={W - padR + 6}
         y={y + 4}
         fontSize="9"
         fontWeight="700"
@@ -1171,11 +1211,25 @@ function PriceLine({
         x={x1 + 6}
         y={y - 3}
         fontSize="9"
+        fontWeight="600"
         fill={color}
         fontFamily="JetBrains Mono, monospace"
       >
         {price.toFixed(dec)}
       </text>
+      {(pipsText || pctText) && (
+        <text
+          x={x1 + 90}
+          y={y - 3}
+          fontSize="9"
+          fontWeight="500"
+          fill={color}
+          opacity="0.85"
+          fontFamily="JetBrains Mono, monospace"
+        >
+          {pipsText ? `${pipsText}` : ""}{pctText ? ` (${pctText})` : ""}
+        </text>
+      )}
     </g>
   );
 }

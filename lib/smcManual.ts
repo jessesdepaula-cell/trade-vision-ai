@@ -5,6 +5,10 @@
  */
 export const SMC_MANUAL = `MANUAL OPERACIONAL SMC / WYCKOFF (LIQUIDITY SWEEP + CHoCh + OB)
 
+DIRETRIZ CRÍTICA DE ANTECIPAÇÃO (ANÁLISE PREDITIVA):
+Você NÃO deve agir apenas de forma reativa reportando setups passados que já aconteceram e passaram (ex: "BOS/ChoCh ocorreu às 10:00").
+Você DEVE atuar de forma proativa e preditiva: identifique zonas de interesse (Order Blocks HTF, FVG ativos, níveis de liquidez SSL/BSL) das quais o preço está se aproximando e monte o plano de trade preventivo ANTES de o preço de fato tocar na região de entrada (ex: "USD/CAD está se aproximando de um Order Block de H4 em X. Ao tocar lá, há alta probabilidade de reversão com entrada em X, stop em Y e alvos em Z").
+
 FILOSOFIA: Smart Money manipula o preço para zonas de liquidez (stops de varejo) antes de mover na direção real.
 OBJETIVO: identificar captura de liquidez (Sweep), confirmar mudança de fluxo (ChoCh) e entrar no retorno ao preço (Order Block / FVG).
 

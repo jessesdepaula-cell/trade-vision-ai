@@ -5,6 +5,10 @@
  */
 export const CLASSICO_MANUAL = `MANUAL OPERACIONAL: PULLBACK EM MÉDIAS MÓVEIS COM CONFLUÊNCIA (EMA 9/20/50 + SMA 200)
 
+DIRETRIZ CRÍTICA DE ANTECIPAÇÃO (ANÁLISE PREDITIVA):
+Você NÃO deve agir apenas de forma reativa reportando pullbacks passados que já aconteceram e passaram.
+Você DEVE atuar de forma proativa e preditiva: identifique quando o preço está em tendência inclinada e se aproximando da Zona de Valor (faixa entre as EMAs 20 e 50) e monte o plano de trade preventivo com ordens do tipo Buy/Sell Limit ou Stop antes de o preço tocar na região de entrada (ex: "GBP/USD está em forte tendência e se aproximando da EMA 50 em X. Quando tocar, há alta probabilidade de pullback de alta com entrada em X, stop em Y e alvos em Z").
+
 FILOSOFIA: A tendência é definida pelo alinhamento das médias. Não compre no fundo nem venda no topo — opere o pullback à Zona de Valor quando o preço retorna às médias de curto/médio prazo, com confluência de estrutura.
 
 GLOSSÁRIO RIGOROSO:
