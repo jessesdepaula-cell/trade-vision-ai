@@ -136,15 +136,35 @@ export default async function ConfiguracoesPage() {
         </Section>
 
         <Section icon={<Activity className="h-3.5 w-3.5" />} title="Notificações de sinal">
+          {/* E-mail de alertas */}
+          <div className="rounded-md border border-emerald-500/15 bg-emerald-500/[0.03] p-3 mb-3">
+            <div className="flex items-start gap-2.5">
+              <Mail className="h-4 w-4 shrink-0 mt-0.5 text-emerald-400" />
+              <div>
+                <p className="text-xs font-semibold text-emerald-300">Alertas por e-mail ativados</p>
+                <p className="mt-0.5 text-[11px] text-zinc-400 leading-relaxed">
+                  Quando a IA detectar um setup de alta probabilidade, você receberá automaticamente um e-mail com{" "}
+                  <span className="text-zinc-300">Entrada, Stop Loss, Alvos e análise estrutural</span> para:
+                </p>
+                <p className="mt-1.5 rounded bg-white/[0.04] border border-white/10 px-2 py-1 text-xs font-mono text-offwhite">
+                  {email}
+                </p>
+                <p className="mt-1.5 text-[10px] text-zinc-500">
+                  Este é o e-mail cadastrado na sua conta. Para alterar, atualize pelo perfil do Clerk.
+                </p>
+              </div>
+            </div>
+          </div>
+          {/* Notificações do navegador */}
           <p className="text-xs text-zinc-400">
-            As preferências de notificação ficam na página{" "}
+            As preferências de notificação do navegador (som, alerta visual) ficam na página{" "}
             <Link
               href="/dashboard/sinais"
               className="text-emerald-400 underline-offset-2 hover:underline"
             >
               Sinais ao vivo
-            </Link>{" "}
-            (filtro de probabilidade mínima, mute, som). São salvas no seu navegador.
+            </Link>
+            .
           </p>
         </Section>
 

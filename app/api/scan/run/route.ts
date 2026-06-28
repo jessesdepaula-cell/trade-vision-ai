@@ -3,7 +3,7 @@ import { getOrCreateUser } from "@/lib/subscription";
 import { scanAllActiveForUser, scanWatchlistItem } from "@/lib/scan/orchestrator";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 // POST /api/scan/run
 // Body opcional: { watchlistId } → scan apenas desse item

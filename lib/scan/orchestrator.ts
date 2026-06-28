@@ -161,9 +161,9 @@ export async function scanWatchlistItem(
       if (risk <= 0) {
         hasSetup = false;
         rrValidationMessage = "Stop Loss inválido (igual à entrada).";
-      } else if ((reward / risk) < 0.98) {
+      } else if ((reward / risk) < 0.75) {
         hasSetup = false;
-        rrValidationMessage = `Risco/Retorno no Alvo 1 de ${parseFloat((reward / risk).toFixed(2))} é menor do que 1:1.`;
+        rrValidationMessage = `Risco/Retorno no Alvo 1 de ${parseFloat((reward / risk).toFixed(2))} é menor do que 3:4 (mínimo aceitável).`;
       }
     } else {
       hasSetup = false;
