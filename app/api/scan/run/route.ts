@@ -15,8 +15,17 @@ export async function POST(req: Request) {
   }
 
   const body = (await req.json().catch(() => null)) as
-    | { watchlistId?: string }
+    | { watchlistId?: string; listOnly?: boolean }
     | null;
+
+  if (body?.listOnly) {
+    const { prisma } = await import("@/lib/prisma");
+    const list = await prisma.watchlist.findMany({
+      where: { userId: user.id, active: true },
+      select: { id: true, symbol: true, timeframe: true, mode: true },
+    });
+    return NextResponse.json({ ok: true, items: list });
+  }
 
   if (body?.watchlistId) {
     const { prisma } = await import("@/lib/prisma");

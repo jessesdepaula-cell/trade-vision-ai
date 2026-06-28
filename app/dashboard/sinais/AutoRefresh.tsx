@@ -6,34 +6,68 @@ import { useRouter } from "next/navigation";
 /**
  * AutoRefresh:
  * 1. Atualiza os dados da página (router.refresh) a cada 30s
- * 2. Dispara um scan completo da watchlist (POST /api/scan/run) a cada 15 minutos
- *    enquanto o usuário está com a aba aberta
+ * 2. Dispara um scan individualizado de cada ativo da watchlist (POST /api/scan/run)
+ *    a cada 15 minutos enquanto o usuário está com a aba aberta. Isso evita
+ *    timeouts de 10s da Vercel Hobby e conflitos de limite de taxa (429).
  */
 export function AutoRefresh({ intervalMs = 30000 }: { intervalMs?: number }) {
   const router = useRouter();
   const lastScanRef = useRef<number>(0);
+  const isScanningRef = useRef<boolean>(false);
 
   useEffect(() => {
-    // Refresh de dados da página
+    // Refresh de dados da página a cada 30s para atualizar o timer de candles e novos dados
     const refreshId = setInterval(() => router.refresh(), intervalMs);
 
     // Scan automático a cada 15 minutos
     const SCAN_INTERVAL = 15 * 60 * 1000; // 15 min
 
     async function triggerScan() {
+      if (isScanningRef.current) return;
+      isScanningRef.current = true;
+
       try {
-        const res = await fetch("/api/scan/run", {
+        // 1. Obter a lista de itens ativos da watchlist
+        const listRes = await fetch("/api/scan/run", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ listOnly: true }),
         });
-        if (res.ok) {
-          lastScanRef.current = Date.now();
-          // Atualiza os dados após o scan
-          router.refresh();
+
+        if (!listRes.ok) throw new Error("Falha ao listar watchlist");
+        const { items } = (await listRes.json()) as { items: Array<{ id: string; symbol: string }> };
+
+        if (!items || items.length === 0) {
+          isScanningRef.current = false;
+          return;
         }
-      } catch {
-        // Silencia erros de rede
+
+        // 2. Escanear cada item individualmente em sequência com intervalo de 1s
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          try {
+            await fetch("/api/scan/run", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ watchlistId: item.id }),
+            });
+            // Atualiza a interface a cada item escaneado para feedback imediato
+            router.refresh();
+          } catch (itemErr) {
+            console.error(`Erro ao escanear ${item.symbol}:`, itemErr);
+          }
+
+          // Aguarda 1 segundo antes de disparar o próximo ativo para respeitar limites de taxa (RPM)
+          if (i < items.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+        }
+
+        lastScanRef.current = Date.now();
+      } catch (err) {
+        console.error("Erro no fluxo do scanner automático:", err);
+      } finally {
+        isScanningRef.current = false;
       }
     }
 

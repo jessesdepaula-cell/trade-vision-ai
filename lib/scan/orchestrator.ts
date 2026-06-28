@@ -280,9 +280,9 @@ export async function scanAllActiveForUser(userId: string) {
   for (let i = 0; i < watchlist.length; i++) {
     const w = watchlist[i];
     
-    // Apenas aguarda de 15 segundos entre itens (evita estourar o limite de tokens/minuto da OpenAI)
+    // Apenas aguarda de 500ms entre itens para evitar estourar o limite de tokens/minuto da OpenAI
     if (i > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 15000));
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
     
     const r = await scanWatchlistItem({

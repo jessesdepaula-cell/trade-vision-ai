@@ -47,10 +47,32 @@ export function WatchlistEditor({
   async function scanAll() {
     setScanningAll(true);
     try {
-      await fetch("/api/scan/run", { method: "POST" });
+      const listRes = await fetch("/api/scan/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ listOnly: true }),
+      });
+      if (!listRes.ok) throw new Error("Erro ao obter lista");
+      const { items } = (await listRes.json()) as { items: Array<{ id: string }> };
+      
+      if (items && items.length > 0) {
+        for (let i = 0; i < items.length; i++) {
+          await fetch("/api/scan/run", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ watchlistId: items[i].id }),
+          });
+          if (i < items.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+        }
+      }
+      
       startTransition(() => {
         window.location.reload();
       });
+    } catch (err) {
+      console.error("Erro ao escanear tudo:", err);
     } finally {
       setScanningAll(false);
     }
