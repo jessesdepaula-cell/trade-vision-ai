@@ -4,7 +4,7 @@
   "crons": [
     {
       "path": "/api/cron/scan-all",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 9 * * *"
     },
     {
       "path": "/api/cron/cleanup",
