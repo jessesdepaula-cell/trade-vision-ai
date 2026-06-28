@@ -199,75 +199,166 @@ function ActiveCard({ signal: s, defaultExpanded }: { signal: SignalData; defaul
         </div>
       )}
 
-      {expanded && <div className="p-4">
-        <div className="space-y-3">
-          {/* Sinal e probabilidade */}
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] uppercase tracking-widest text-zinc-500">Sinal</p>
-              <p className={cn("mt-0.5 text-base font-semibold tracking-tight", meta.text)}>
-                {meta.label}
-              </p>
+      {expanded && (
+        <div className="p-4 space-y-4">
+
+          {/* ── DIREÇÃO PRINCIPAL ── */}
+          <div className={cn(
+            "rounded-xl border p-4 flex items-center justify-between gap-4",
+            isBuy
+              ? "border-emerald-500/25 bg-gradient-to-r from-emerald-500/[0.08] to-emerald-500/[0.02]"
+              : "border-rose-500/25 bg-gradient-to-r from-rose-500/[0.08] to-rose-500/[0.02]"
+          )}>
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-2xl",
+                isBuy
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                  : "border-rose-500/30 bg-rose-500/10 text-rose-300"
+              )}>
+                {isBuy ? "▲" : "▼"}
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-zinc-500">Sinal da IA</p>
+                <p className={cn(
+                  "text-xl font-extrabold tracking-tight mt-0.5",
+                  isBuy ? "text-emerald-300" : "text-rose-300"
+                )}>
+                  {meta.label}
+                </p>
+                {s.tipoSetup && (
+                  <p className="mt-0.5 text-[10px] text-zinc-500">{s.tipoSetup}</p>
+                )}
+              </div>
             </div>
             <div className="text-right">
-              <p className="text-[10px] uppercase tracking-widest text-zinc-500">Probabilidade</p>
-              <p className={cn("num mt-0.5 text-base font-medium", meta.text)}>
-                {s.probability !== null ? `${s.probability}%` : "—"}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] uppercase tracking-widest text-zinc-500">Conf.</p>
-              <p className="num mt-0.5 text-base font-medium text-offwhite">
-                {s.confidence ?? "—"}
-              </p>
+              {s.probability !== null && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-zinc-500">Probabilidade</p>
+                  <p className={cn("num text-2xl font-bold mt-0.5", meta.text)}>{s.probability}%</p>
+                </div>
+              )}
+              {s.confidence && (
+                <p className="mt-1 text-[10px] text-zinc-500">Conf: <span className="text-zinc-300">{s.confidence}</span></p>
+              )}
             </div>
           </div>
 
+          {/* Barra de probabilidade */}
           {s.probability !== null && (
             <div className="h-1 w-full overflow-hidden rounded-full bg-white/5">
               <div
-                className={cn("h-full rounded-full", meta.bar)}
+                className={cn("h-full rounded-full transition-all", meta.bar)}
                 style={{ width: `${Math.min(s.probability, 100)}%` }}
               />
             </div>
           )}
 
-          {/* Preços */}
-          <div className="grid grid-cols-3 gap-2">
-            <PriceBox
-              icon={<Target className="h-3 w-3" />}
-              label="Entrada"
-              value={s.entryPrice}
+          {/* ── PLANO DE TRADE COMPLETO ── */}
+          <div>
+            <p className="mb-2 text-[10px] uppercase tracking-widest text-zinc-500">Plano de trade</p>
+
+            {/* Entrada */}
+            <div className="mb-2 flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-md border border-white/10 bg-white/[0.04]">
+                  <Target className="h-3.5 w-3.5 text-zinc-300" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-zinc-500">Entrada</p>
+                  <p className="text-[11px] text-zinc-400">Ponto de execução</p>
+                </div>
+              </div>
+              <p className="num text-base font-bold text-white">
+                {s.entryPrice !== null ? s.entryPrice.toFixed(decimals(s.symbol)) : "—"}
+              </p>
+            </div>
+
+            {/* Stop Loss */}
+            <div className="mb-3 flex items-center justify-between rounded-lg border border-rose-500/20 bg-rose-500/[0.04] px-4 py-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-md border border-rose-500/20 bg-rose-500/[0.08]">
+                  <TrendingDown className="h-3.5 w-3.5 text-rose-400" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-rose-400">Stop Loss</p>
+                  <p className="text-[11px] text-zinc-500">Invalidação — sai do trade</p>
+                </div>
+              </div>
+              <p className="num text-base font-bold text-rose-300">
+                {s.stopPrice !== null ? s.stopPrice.toFixed(decimals(s.symbol)) : "—"}
+              </p>
+            </div>
+
+            {/* Divisor */}
+            <div className="mb-3 flex items-center gap-2 text-[10px] text-zinc-600">
+              <div className="flex-1 border-t border-dashed border-white/[0.05]" />
+              <TrendingUp className="h-3 w-3" />
+              <span className="uppercase tracking-widest">Alvos de saída</span>
+              <div className="flex-1 border-t border-dashed border-white/[0.05]" />
+            </div>
+
+            {/* Alvo 1 */}
+            <TargetRow
+              label="Alvo 1"
+              sublabel="Saída conservadora · parcial"
+              value={s.target1}
               symbol={s.symbol}
-              tone="emerald"
+              entry={s.entryPrice}
+              stop={s.stopPrice}
+              recommended={s.recommendedTarget === 1}
+              isBuy={!!isBuy}
             />
-            <PriceBox
-              icon={<TrendingDown className="h-3 w-3" />}
-              label="Stop"
-              value={s.stopPrice}
+
+            {/* Alvo 2 */}
+            <TargetRow
+              label="Alvo 2"
+              sublabel="Saída principal · recomendada"
+              value={s.target2}
               symbol={s.symbol}
-              tone="rose"
+              entry={s.entryPrice}
+              stop={s.stopPrice}
+              recommended={s.recommendedTarget === 2}
+              isBuy={!!isBuy}
             />
-            <PriceBox
-              icon={<TrendingUp className="h-3 w-3" />}
-              label={`Alvo${s.recommendedTarget ? " " + s.recommendedTarget : ""}`}
-              value={target}
+
+            {/* Alvo 3 */}
+            <TargetRow
+              label="Alvo 3"
+              sublabel="Saída agressiva · extensão máxima"
+              value={s.target3}
               symbol={s.symbol}
-              tone="emerald"
-              extra={s.riskReward ?? undefined}
+              entry={s.entryPrice}
+              stop={s.stopPrice}
+              recommended={s.recommendedTarget === 3}
+              isBuy={!!isBuy}
             />
+
+            {/* R:R geral */}
+            {s.riskReward && (
+              <div className="mt-3 flex items-center justify-between rounded-md border border-white/5 bg-white/[0.02] px-3 py-2">
+                <p className="text-[10px] uppercase tracking-widest text-zinc-500">R:R geral declarado pela IA</p>
+                <p className="num text-sm font-semibold text-zinc-200">{s.riskReward}</p>
+              </div>
+            )}
           </div>
 
-          {/* Estrutura/justificativa */}
+          {/* ── ANÁLISE DA IA ── */}
           {s.justification && (
-            <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
+            <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
               <p className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-zinc-500">
                 <Radio className="h-3 w-3 text-emerald-400" />
                 Análise da IA
               </p>
-              <p className="text-xs leading-relaxed text-zinc-300">
-                {s.justification}
-              </p>
+              <p className="text-xs leading-relaxed text-zinc-300">{s.justification}</p>
+            </div>
+          )}
+
+          {/* ── ESTRUTURA ── */}
+          {s.structure && (
+            <div className="rounded-lg border border-white/5 bg-white/[0.015] px-3 py-2">
+              <p className="mb-1 text-[10px] uppercase tracking-widest text-zinc-600">Estrutura do mercado</p>
+              <p className="text-xs text-zinc-400 leading-relaxed">{s.structure}</p>
             </div>
           )}
 
@@ -281,25 +372,26 @@ function ActiveCard({ signal: s, defaultExpanded }: { signal: SignalData; defaul
 
           {/* Resultado se fechado */}
           {(s.status === "WIN" || s.status === "LOSS") && (
-            <div className="flex items-center justify-between rounded-md border border-white/5 bg-white/[0.02] px-3 py-2 text-xs">
-              <span className="text-zinc-500">
+            <div className={cn(
+              "flex items-center justify-between rounded-lg border px-4 py-3 text-xs",
+              s.status === "WIN"
+                ? "border-emerald-500/20 bg-emerald-500/[0.04]"
+                : "border-rose-500/20 bg-rose-500/[0.04]"
+            )}>
+              <span className="text-zinc-400">
                 Fechado{" "}
                 {s.closedAt && (
                   <span className="num text-zinc-300">
-                    {new Date(s.closedAt).toLocaleTimeString("pt-BR")}
+                    {new Date(s.closedAt).toLocaleString("pt-BR")}
                   </span>
                 )}
                 {" · saída "}
                 <span className="num text-zinc-300">{s.exitPrice?.toFixed(decimals(s.symbol))}</span>
               </span>
-              <span
-                className={cn(
-                  "num font-medium",
-                  s.rMultiple !== null && s.rMultiple > 0
-                    ? "text-emerald-400"
-                    : "text-rose-400",
-                )}
-              >
+              <span className={cn(
+                "num text-base font-bold",
+                s.rMultiple !== null && s.rMultiple > 0 ? "text-emerald-400" : "text-rose-400",
+              )}>
                 {s.rMultiple !== null
                   ? `${s.rMultiple > 0 ? "+" : ""}${s.rMultiple.toFixed(2)}R`
                   : "—"}
@@ -307,51 +399,79 @@ function ActiveCard({ signal: s, defaultExpanded }: { signal: SignalData; defaul
             </div>
           )}
         </div>
-      </div>}
+      )}
     </div>
   );
 }
 
-function PriceBox({
-  icon,
+function TargetRow({
   label,
+  sublabel,
   value,
   symbol,
-  tone,
-  extra,
+  entry,
+  stop,
+  recommended,
+  isBuy,
 }: {
-  icon: React.ReactNode;
   label: string;
+  sublabel: string;
   value: number | null;
   symbol: string;
-  tone: "emerald" | "rose";
-  extra?: string;
+  entry: number | null;
+  stop: number | null;
+  recommended: boolean;
+  isBuy: boolean;
 }) {
+  // Calcula R:R para este alvo
+  let rr: string | null = null;
+  if (value !== null && entry !== null && stop !== null) {
+    const risk = Math.abs(entry - stop);
+    const reward = Math.abs(value - entry);
+    if (risk > 0) rr = `1:${(reward / risk).toFixed(1)}`;
+  }
+
+  if (value === null) return null;
+
   return (
-    <div
-      className={cn(
-        "rounded-md border p-2",
-        tone === "emerald"
-          ? "border-emerald-500/20 bg-emerald-500/[0.04]"
-          : "border-rose-500/20 bg-rose-500/[0.04]",
-      )}
-    >
-      <div
-        className={cn(
-          "flex items-center gap-1 text-[9px] uppercase tracking-widest",
-          tone === "emerald" ? "text-emerald-400" : "text-rose-400",
-        )}
-      >
-        {icon}
-        {label}
+    <div className={cn(
+      "mb-2 flex items-center justify-between rounded-lg border px-4 py-3 transition",
+      recommended
+        ? "border-emerald-500/25 bg-emerald-500/[0.06]"
+        : "border-emerald-500/10 bg-emerald-500/[0.02]"
+    )}>
+      <div className="flex items-center gap-2">
+        <div className={cn(
+          "flex h-6 w-6 items-center justify-center rounded-md border text-[10px] font-bold",
+          recommended
+            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+            : "border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-500"
+        )}>
+          {label.replace("Alvo ", "")}
+        </div>
+        <div>
+          <div className="flex items-center gap-1.5">
+            <p className="text-[10px] uppercase tracking-widest text-emerald-400">{label}</p>
+            {recommended && (
+              <span className="rounded-full bg-emerald-500/10 px-1.5 py-0 text-[9px] font-bold uppercase tracking-wider text-emerald-300">
+                ★ Recomendado
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-zinc-500">{sublabel}</p>
+        </div>
       </div>
-      <p className="num mt-1 text-sm font-medium text-offwhite">
-        {value !== null ? value.toFixed(decimals(symbol)) : "—"}
-      </p>
-      {extra && <p className="num mt-0.5 text-[10px] text-zinc-500">{extra}</p>}
+      <div className="text-right">
+        <p className="num text-base font-bold text-emerald-300">
+          {value.toFixed(decimals(symbol))}
+        </p>
+        {rr && <p className="num text-[10px] text-zinc-500">{rr}</p>}
+      </div>
     </div>
   );
 }
+
+
 
 function NoSetupRow({ signal: s }: { signal: SignalData }) {
   const [expanded, setExpanded] = useState(false);
