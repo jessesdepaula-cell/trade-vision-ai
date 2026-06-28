@@ -687,42 +687,61 @@ export function SignalChart({
               );
             })()}
 
-            {/* FVGs */}
-            {smc.fvgs.map((f, i) => {
+            {/* FVGs — apenas os não preenchidos pelo preço */}
+            {smc.fvgs.filter(f => {
+              // Considera FVG "intacto" se as velas após ele não cruzaram a zona
+              const testCandles = visible.slice(Math.max(0, (toView(f.endIdx) ?? 0) + 1));
+              if (testCandles.length === 0) return true;
+              // FVG bullish: preenchido se alguma vela teve low <= bottom do gap
+              if (f.direction === "bullish") return !testCandles.some(c => c.l <= f.bottom);
+              // FVG bearish: preenchido se alguma vela teve high >= top do gap
+              return !testCandles.some(c => c.h >= f.top);
+            }).map((f, i) => {
               const sIdx = toView(f.startIdx);
               const eIdx = toView(f.endIdx);
               if (sIdx === null && eIdx === null) return null;
+              // FVG se estende da sua origem até o final da tela (permanece aberto)
               const x1 = xOf(sIdx ?? 0) - candleW / 2;
-              const x2 = xOf(eIdx ?? visible.length - 1) + candleW / 2;
-              const fill = f.direction === "bullish" ? "rgba(16,185,129,0.10)" : "rgba(244,63,94,0.10)";
-              const stroke = f.direction === "bullish" ? "rgba(16,185,129,0.45)" : "rgba(244,63,94,0.45)";
+              const x2 = W - padR;
+              const fill = f.direction === "bullish" ? "rgba(16,185,129,0.09)" : "rgba(244,63,94,0.09)";
+              const stroke = f.direction === "bullish" ? "rgba(16,185,129,0.5)" : "rgba(244,63,94,0.5)";
               const yT = yOf(f.top);
               const yB = yOf(f.bottom);
+              const midY = (yT + yB) / 2; // CE — Consequent Encroachment (ponto de entrada)
               return (
                 <g key={`fvg-${i}`}>
-                  <rect x={x1} y={Math.min(yT, yB)} width={Math.max(2, x2 - x1)} height={Math.abs(yB - yT)} fill={fill} stroke={stroke} />
-                  <text x={x1 + 2} y={Math.min(yT, yB) - 2} fontSize="7" fill={stroke} fontFamily="JetBrains Mono, monospace">
-                    FVG
+                  <rect x={x1} y={Math.min(yT, yB)} width={Math.max(2, x2 - x1)} height={Math.abs(yB - yT)} fill={fill} />
+                  <rect x={x1} y={Math.min(yT, yB)} width={Math.max(2, x2 - x1)} height={Math.abs(yB - yT)} fill="none" stroke={stroke} strokeWidth="0.5" />
+                  {/* CE line — ponto de entrada ótimo no meio do FVG */}
+                  <line x1={x1} y1={midY} x2={x2} y2={midY} stroke={stroke} strokeWidth="0.7" strokeDasharray="3 2" opacity="0.7" />
+                  <text x={x2 - 40} y={Math.min(yT, yB) + 8} fontSize="7" fill={stroke} fontFamily="JetBrains Mono, monospace" opacity="0.9">
+                    FVG {f.direction === "bullish" ? "▲" : "▼"}
                   </text>
+                  <text x={x2 - 16} y={midY - 2} fontSize="6" fill={stroke} fontFamily="JetBrains Mono, monospace" opacity="0.7">CE</text>
                 </g>
               );
             })}
 
-            {/* Order Blocks */}
+            {/* Order Blocks — largura limitada a ~25 candles à frente */}
             {smc.obs.map((ob, i) => {
               const idx = toView(ob.idx);
               if (idx === null) return null;
               const x1 = xOf(idx) - candleW / 2;
-              const x2 = W - padR;
-              const fill = ob.direction === "bullish" ? "rgba(59,130,246,0.10)" : "rgba(168,85,247,0.10)";
-              const stroke = ob.direction === "bullish" ? "rgba(59,130,246,0.55)" : "rgba(168,85,247,0.55)";
+              // Limita o OB a no máximo 25 candles à frente (não spans o gráfico todo)
+              const obEndIdx = Math.min(visible.length - 1, idx + 25);
+              const x2 = Math.min(W - padR, xOf(obEndIdx) + candleW / 2);
+              const fill = ob.direction === "bullish" ? "rgba(59,130,246,0.12)" : "rgba(168,85,247,0.12)";
+              const stroke = ob.direction === "bullish" ? "rgba(59,130,246,0.6)" : "rgba(168,85,247,0.6)";
               const yT = yOf(ob.top);
               const yB = yOf(ob.bottom);
               return (
                 <g key={`ob-${i}`}>
-                  <rect x={x1} y={Math.min(yT, yB)} width={x2 - x1} height={Math.abs(yB - yT)} fill={fill} stroke={stroke} strokeDasharray="2 2" />
-                  <text x={x1 + 2} y={Math.min(yT, yB) - 2} fontSize="7" fill={stroke} fontFamily="JetBrains Mono, monospace">
-                    OB {ob.direction === "bullish" ? "↑" : "↓"}
+                  <rect x={x1} y={Math.min(yT, yB)} width={Math.max(4, x2 - x1)} height={Math.abs(yB - yT)} fill={fill} />
+                  {/* Borda esquerda mais grossa para marcar origem do OB */}
+                  <line x1={x1 + 1} y1={Math.min(yT, yB)} x2={x1 + 1} y2={Math.max(yT, yB)} stroke={stroke} strokeWidth="2" />
+                  <rect x={x1} y={Math.min(yT, yB)} width={Math.max(4, x2 - x1)} height={Math.abs(yB - yT)} fill="none" stroke={stroke} strokeWidth="0.5" strokeDasharray="3 2" />
+                  <text x={x1 + 4} y={Math.min(yT, yB) + 9} fontSize="7" fill={stroke} fontFamily="JetBrains Mono, monospace">
+                    OB {ob.direction === "bullish" ? "▲" : "▼"}
                   </text>
                 </g>
               );
@@ -762,19 +781,23 @@ export function SignalChart({
               );
             })}
 
-            {/* Swings (pequenos marcadores) */}
-            {smc.swings.slice(-30).map((sw, i) => {
+            {/* Swings — apenas os 8 mais recentes para não poluir */}
+            {smc.swings.slice(-8).map((sw, i) => {
               const idx = toView(sw.idx);
               if (idx === null) return null;
               const x = xOf(idx);
               const y = yOf(sw.price);
-              const color = sw.kind === "high" ? "rgba(244,63,94,0.7)" : "rgba(16,185,129,0.7)";
-              const dy = sw.kind === "high" ? -6 : 6;
+              const color = sw.kind === "high" ? "rgba(244,63,94,0.75)" : "rgba(16,185,129,0.75)";
+              const dy = sw.kind === "high" ? -8 : 8;
               return (
                 <g key={`sw-${i}`}>
-                  <circle cx={x} cy={y} r="1.5" fill={color} />
-                  <text x={x} y={y + dy} fontSize="7" textAnchor="middle" fill={color} fontFamily="JetBrains Mono, monospace">
-                    {sw.kind === "high" ? "H" : "L"}
+                  {/* Triângulo indicador de swing */}
+                  {sw.kind === "high"
+                    ? <polygon points={`${x},${y - 3} ${x - 4},${y - 9} ${x + 4},${y - 9}`} fill={color} opacity="0.8" />
+                    : <polygon points={`${x},${y + 3} ${x - 4},${y + 9} ${x + 4},${y + 9}`} fill={color} opacity="0.8" />
+                  }
+                  <text x={x} y={y + dy + (sw.kind === "high" ? -2 : 5)} fontSize="7" textAnchor="middle" fill={color} fontFamily="JetBrains Mono, monospace" fontWeight="600">
+                    {sw.kind === "high" ? "HH" : "LL"}
                   </text>
                 </g>
               );
@@ -818,11 +841,24 @@ export function SignalChart({
           </g>
         )}
 
-        {/* Premium/Discount Background Shading */}
-        <rect x={padL} y={16} width={innerW} height={158} fill="rgba(244,63,94,0.015)" pointerEvents="none" />
-        <rect x={padL} y={174} width={innerW} height={158} fill="rgba(16,185,129,0.015)" pointerEvents="none" />
-        <line x1={padL} y1={174} x2={W - padR} y2={174} stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="5 5" pointerEvents="none" />
-        <text x={padL + 6} y={171} fontSize="7" fill="rgba(255,255,255,0.25)" fontFamily="JetBrains Mono, monospace" pointerEvents="none">FIB 50% (PREMIUM / DISCOUNT)</text>
+        {/* Premium/Discount — calculado pelo preço real (50% do range visível) */}
+        {showSmc && (() => {
+          const midPrice = (yMax + yMin) / 2;
+          const yMid = yOf(midPrice);
+          const yTop = yOf(yMax);
+          const yBot = yOf(yMin);
+          return (
+            <g pointerEvents="none">
+              {/* Zona Premium (acima do equilíbrio) — vermelho suave */}
+              <rect x={padL} y={yTop} width={innerW} height={Math.max(0, yMid - yTop)} fill="rgba(244,63,94,0.012)" />
+              {/* Zona Discount (abaixo do equilíbrio) — verde suave */}
+              <rect x={padL} y={yMid} width={innerW} height={Math.max(0, yBot - yMid)} fill="rgba(16,185,129,0.012)" />
+              {/* Linha de Equilíbrio (50%) */}
+              <line x1={padL} y1={yMid} x2={W - padR} y2={yMid} stroke="rgba(255,255,255,0.07)" strokeWidth="1" strokeDasharray="4 4" />
+              <text x={padL + 6} y={yMid - 3} fontSize="7" fill="rgba(255,255,255,0.22)" fontFamily="JetBrains Mono, monospace">EQ 50% — Premium ▲ / Discount ▼</text>
+            </g>
+          );
+        })()}
 
         {entry !== null && (
           <PriceLine
