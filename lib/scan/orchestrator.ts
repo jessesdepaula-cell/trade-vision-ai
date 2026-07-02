@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { scanWithAI, type Candle } from "@/lib/aiScan";
 import { generateSmcSignal } from "@/lib/smcSignal";
+import { narrateSignal } from "@/lib/narrator";
 import { evaluateOpenSignalsAgainstCandles } from "@/lib/signalTracker";
 import { sendSignalEmail } from "@/lib/email";
 import { getCandles } from "@/lib/market/router";
@@ -145,6 +146,18 @@ export async function scanWatchlistItem(
       `[scan] SMC determinístico ${spec.symbol}/${tf}: hasSetup=${result.hasSetup} ` +
         `checks=${det.meta.checksTrue}/6 bias=${det.meta.htfBias} dist=${det.meta.distanceToEntryPct?.toFixed(2) ?? "-"}% (${det.meta.reason})`,
     );
+    // Narração opcional pela IA (grátis/barata). Best-effort: se falhar ou não
+    // houver chave, mantém a justificativa gerada pelo código. Nunca bloqueia o sinal.
+    if (result.hasSetup) {
+      const narrated = await narrateSignal({
+        symbol: spec.symbol,
+        timeframe: tf,
+        mode: "SMC",
+        result,
+        userKeys: userKeys ?? undefined,
+      });
+      if (narrated) result.justification = narrated;
+    }
   } else {
     try {
       result = await scanWithAI({
